@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual Env
+venv/
+.venv/
+backend/venv/
+.env
+
+# Uploads & Assets
+uploads/
+backend/uploads/
+exports/
+charts/
+
+# Databases & Backups
+*.db
+*.duckdb
+*.duckdb.*
+*.bak
+rag_indexes/
+
+# Logs
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+dist/
+build/
+.next/
