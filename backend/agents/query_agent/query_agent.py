@@ -173,40 +173,40 @@ class QueryAgent:
                 "has been exceeded."
             )
 
-        workspace_id = workspace.get("workspace_id")
-
-        try:
-            sqlite_manager.save_chat(
-                workspace_id,
-                question,
-                answer
-            )
-        except Exception as e:
-            print(
-                f"Chat save error: {e}"
-            )
-
         chart_path = None
 
         try:
-
             if (
                 len(
                     result_df.columns
                 ) >= 2
             ):
-
                 chart_path = (
                     VisualizationAgent
                     .create_chart(
                         result_df
                     )
                 )
-
         except Exception as e:
-
             print(
                 f"Chart Error: {e}"
+            )
+
+        workspace_id = workspace.get("workspace_id")
+
+        import json
+        try:
+            sqlite_manager.save_chat(
+                workspace_id=workspace_id,
+                question=question,
+                answer=answer,
+                sql_query=sql,
+                result_json=json.dumps(result) if result else None,
+                chart_json=json.dumps(chart_path) if chart_path else None
+            )
+        except Exception as e:
+            print(
+                f"Chat save error: {e}"
             )
 
         return {

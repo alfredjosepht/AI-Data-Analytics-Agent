@@ -163,3 +163,144 @@ export const exportWorkspaceExcel = async (workspaceId) => {
   a.remove();
   window.URL.revokeObjectURL(url);
 };
+
+export const renameWorkspace = async (workspaceId, name) => {
+  const response = await API.post(`/workspaces/${workspaceId}/rename`, { name });
+  return response.data;
+};
+
+export const deleteWorkspace = async (workspaceId) => {
+  const response = await API.delete(`/workspaces/${workspaceId}`);
+  return response.data;
+};
+
+export const duplicateWorkspace = async (workspaceId) => {
+  const response = await API.post(`/workspaces/${workspaceId}/duplicate`);
+  return response.data;
+};
+
+export const getChatHistory = async (workspaceId) => {
+  const response = await API.get(`/chat/workspaces/${workspaceId}/chat_history`);
+  return response.data;
+};
+
+export const clearChatHistory = async (workspaceId) => {
+  const response = await API.delete(`/chat/workspaces/${workspaceId}/chat_history`);
+  return response.data;
+};
+
+export const deleteChatMessage = async (chatId) => {
+  const response = await API.delete(`/chat/chat_history/${chatId}`);
+  return response.data;
+};
+
+export const exportWorkspaceDocx = async (workspaceId) => {
+  const response = await API.get(`/workspaces/${workspaceId}/export/docx`, {
+    responseType: "blob",
+  });
+  const blob = new Blob([response.data], { type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `workspace_${workspaceId}_report.docx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+export const exportWorkspaceHtml = async (workspaceId) => {
+  const response = await API.get(`/workspaces/${workspaceId}/export/html`, {
+    responseType: "blob",
+  });
+  const blob = new Blob([response.data], { type: "text/html" });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `workspace_${workspaceId}_report.html`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+export const exportChatHistory = async (workspaceId, format) => {
+  const response = await API.get(`/chat/workspaces/${workspaceId}/chat_history/export?format=${format}`, {
+    responseType: "blob",
+  });
+  
+  let type = "text/plain";
+  let ext = "txt";
+  if (format === "pdf") {
+    type = "application/pdf";
+    ext = "pdf";
+  } else if (format === "docx") {
+    type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+    ext = "docx";
+  }
+
+  const blob = new Blob([response.data], { type });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `chat_history_workspace_${workspaceId}.${ext}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+export const exportChartBackend = async (data, chartType, xCol, yCol, format) => {
+  const response = await API.post(`/chart/export`, {
+    data,
+    chart_type: chartType,
+    x_col: xCol,
+    y_col: yCol,
+    format
+  }, { responseType: "blob" });
+
+  let type = "image/png";
+  if (format === "svg") type = "image/svg+xml";
+  else if (format === "pdf") type = "application/pdf";
+
+  const blob = new Blob([response.data], { type });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `chart.${format}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};
+
+export const getChatMessages = async (workspaceId) => {
+  const response = await API.get(`/chat/workspaces/${workspaceId}/chat_messages`);
+  return response.data;
+};
+
+export const exportReportWizard = async (workspaceId, config) => {
+  const response = await API.post(`/workspaces/${workspaceId}/export_report`, config, {
+    responseType: "blob"
+  });
+  
+  let type = "application/pdf";
+  let ext = "pdf";
+  if (config.format === "pptx") {
+    type = "application/vnd.openxmlformats-officedocument.presentationml.presentation";
+    ext = "pptx";
+  } else if (config.format === "excel") {
+    type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+    ext = "xlsx";
+  }
+  
+  const blob = new Blob([response.data], { type });
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `workspace_${workspaceId}_custom_report.${ext}`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.URL.revokeObjectURL(url);
+};

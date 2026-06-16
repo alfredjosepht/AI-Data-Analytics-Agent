@@ -137,3 +137,48 @@ def generate_chart(request: ChartGenerateRequest):
         }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to generate custom chart: {e}")
+
+
+class ChartExportRequest(BaseModel):
+    data: List[Dict[str, Any]]
+    chart_type: str
+    x_col: Optional[str] = None
+    y_col: Optional[str] = None
+    format: str = "png" # png, svg, pdf
+
+
+@router.post("/export")
+def export_chart(request: ChartExportRequest):
+    if not request.data:
+        raise HTTPException(status_code=400, detail="Data cannot be empty")
+        
+    from backend.agents.visualization_agent.chart_exporter import ChartExporter
+    try:
+        fmt = request.format.lower()
+        if fmt not in ["png", "svg", "pdf"]:
+            raise HTTPException(status_code=400, detail="Unsupported format. Choose png, svg, or pdf.")
+            
+        img_path = ChartExporter.generate_chart_image(
+            data_list=request.data,
+            chart_type=request.chart_type,
+            x_col=request.x_col,
+            y_col=request.y_col,
+            output_format=fmt
+        )
+        
+        if not img_path or not os.path.exists(img_path):
+            raise HTTPException(status_code=500, detail="Failed to generate chart file")
+
+        media_types = {
+            "png": "image/png",
+            "svg": "image/svg+xml",
+            "pdf": "application/pdf"
+        }
+        
+        return FileResponse(
+            img_path, 
+            media_type=media_types[fmt], 
+            filename=f"chart.{fmt}"
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

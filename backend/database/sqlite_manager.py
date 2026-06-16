@@ -58,6 +58,30 @@ class SQLiteManager:
             workspace_id INTEGER,
             question TEXT,
             answer TEXT,
+            sql_query TEXT,
+            result_json TEXT,
+            chart_json TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+        )
+        """)
+
+        # Migration block for existing databases
+        for col in ["sql_query", "result_json", "chart_json"]:
+            try:
+                cursor.execute(f"ALTER TABLE chat_history ADD COLUMN {col} TEXT")
+            except Exception:
+                pass
+
+        cursor.execute("""
+        CREATE TABLE IF NOT EXISTS chat_messages(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id INTEGER,
+            role TEXT,
+            message TEXT,
+            sql_query TEXT,
+            result_json TEXT,
+            chart_json TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
         )
@@ -102,6 +126,53 @@ class SQLiteManager:
         )
         """)
 
+        self.conn.commit()
+        self.migrate_chat_history_to_messages()
+
+    def migrate_chat_history_to_messages(self):
+        cursor = self.conn.cursor()
+        
+        # Check if chat_messages exists and has any records
+        try:
+            cursor.execute("SELECT COUNT(*) FROM chat_messages")
+            msg_count = cursor.fetchone()[0]
+            if msg_count > 0:
+                return
+        except Exception:
+            return
+            
+        # Check if chat_history has records
+        try:
+            cursor.execute("SELECT workspace_id, question, answer, sql_query, result_json, chart_json, created_at FROM chat_history ORDER BY created_at ASC")
+            history_rows = cursor.fetchall()
+        except Exception:
+            return
+            
+        if not history_rows:
+            return
+            
+        # Migrate history to chat_messages
+        for row in history_rows:
+            workspace_id, question, answer, sql_query, result_json, chart_json, created_at = row
+            
+            # User question message
+            cursor.execute(
+                """
+                INSERT INTO chat_messages(workspace_id, role, message, created_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (workspace_id, "user", question, created_at)
+            )
+            
+            # Assistant answer message
+            cursor.execute(
+                """
+                INSERT INTO chat_messages(workspace_id, role, message, sql_query, result_json, chart_json, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (workspace_id, "assistant", answer, sql_query, result_json, chart_json, created_at)
+            )
+            
         self.conn.commit()
 
     def create_workspace(
@@ -220,28 +291,55 @@ class SQLiteManager:
         self,
         workspace_id,
         question,
-        answer
+        answer,
+        sql_query=None,
+        result_json=None,
+        chart_json=None
     ):
 
         cursor = self.conn.cursor()
 
+        # Insert user message
         cursor.execute(
             """
-            INSERT INTO chat_history(
+            INSERT INTO chat_messages(
                 workspace_id,
-                question,
-                answer
+                role,
+                message
             )
-            VALUES (?, ?, ?)
+            VALUES (?, 'user', ?)
             """,
             (
                 workspace_id,
-                question,
-                answer
+                question
+            )
+        )
+
+        # Insert assistant message
+        cursor.execute(
+            """
+            INSERT INTO chat_messages(
+                workspace_id,
+                role,
+                message,
+                sql_query,
+                result_json,
+                chart_json
+            )
+            VALUES (?, 'assistant', ?, ?, ?, ?)
+            """,
+            (
+                workspace_id,
+                answer,
+                sql_query,
+                result_json,
+                chart_json
             )
         )
 
         self.conn.commit()
+        return cursor.lastrowid
+
 
     def approve_cleaning(self, workspace_id):
 
@@ -426,10 +524,74 @@ class SQLiteManager:
         cursor = self.conn.cursor()
         cursor.execute(
             """
-            SELECT id, workspace_id, question, answer, created_at
-            FROM chat_history
+            SELECT id, workspace_id, role, message, sql_query, result_json, chart_json, created_at
+            FROM chat_messages
             WHERE workspace_id = ?
-            ORDER BY created_at ASC
+            ORDER BY created_at ASC, id ASC
+            """,
+            (workspace_id,)
+        )
+        rows = cursor.fetchall()
+        
+        # Reconstruct Q&A pairs
+        history = []
+        current_q = None
+        current_q_time = None
+        
+        for r in rows:
+            mid, ws_id, role, msg, sql, res, chart, created_at = r
+            if role == 'user':
+                if current_q is not None:
+                    # Unpaired user question
+                    history.append({
+                        "id": mid,
+                        "workspace_id": ws_id,
+                        "question": current_q,
+                        "answer": "",
+                        "sql_query": None,
+                        "result_json": None,
+                        "chart_json": None,
+                        "created_at": current_q_time
+                    })
+                current_q = msg
+                current_q_time = created_at
+            else: # assistant
+                history.append({
+                    "id": mid,
+                    "workspace_id": ws_id,
+                    "question": current_q or "System Query",
+                    "answer": msg,
+                    "sql_query": sql,
+                    "result_json": res,
+                    "chart_json": chart,
+                    "created_at": created_at
+                })
+                current_q = None
+                current_q_time = None
+                
+        if current_q is not None:
+            # Trailing unpaired user question
+            history.append({
+                "id": len(rows),
+                "workspace_id": workspace_id,
+                "question": current_q,
+                "answer": "",
+                "sql_query": None,
+                "result_json": None,
+                "chart_json": None,
+                "created_at": current_q_time
+            })
+            
+        return history
+
+    def get_chat_messages(self, workspace_id):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            SELECT id, workspace_id, role, message, sql_query, result_json, chart_json, created_at
+            FROM chat_messages
+            WHERE workspace_id = ?
+            ORDER BY created_at ASC, id ASC
             """,
             (workspace_id,)
         )
@@ -438,12 +600,60 @@ class SQLiteManager:
             {
                 "id": r[0],
                 "workspace_id": r[1],
-                "question": r[2],
-                "answer": r[3],
-                "created_at": r[4]
+                "role": r[2],
+                "message": r[3],
+                "sql_query": r[4],
+                "result_json": r[5],
+                "chart_json": r[6],
+                "created_at": r[7]
             }
             for r in rows
         ]
+
+    def rename_workspace(self, workspace_id, new_name):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            UPDATE workspaces
+            SET name = ?
+            WHERE id = ?
+            """,
+            (new_name, workspace_id)
+        )
+        self.conn.commit()
+
+    def delete_workspace(self, workspace_id):
+        cursor = self.conn.cursor()
+        cursor.execute("DELETE FROM chat_messages WHERE workspace_id = ?", (workspace_id,))
+        cursor.execute("DELETE FROM chat_history WHERE workspace_id = ?", (workspace_id,))
+        cursor.execute("DELETE FROM dataset_versions WHERE workspace_id = ?", (workspace_id,))
+        cursor.execute("DELETE FROM reports WHERE workspace_id = ?", (workspace_id,))
+        cursor.execute("DELETE FROM schedules WHERE workspace_id = ?", (workspace_id,))
+        cursor.execute("DELETE FROM workspaces WHERE id = ?", (workspace_id,))
+        self.conn.commit()
+
+    def delete_chat_message(self, chat_id):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            DELETE FROM chat_messages
+            WHERE id = ?
+            """,
+            (chat_id,)
+        )
+        self.conn.commit()
+
+    def clear_workspace_chat(self, workspace_id):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            DELETE FROM chat_messages
+            WHERE workspace_id = ?
+            """,
+            (workspace_id,)
+        )
+        self.conn.commit()
+
 
 
 sqlite_manager = SQLiteManager()

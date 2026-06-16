@@ -54,6 +54,16 @@ class DataCleaner:
                     "severity": "major",
                     "impact": f"Deletes {null_count} rows ({pct:.1f}% of data)."
                 })
+                if pct > 50:
+                    recommendations.append({
+                        "id": f"drop_column:{col}",
+                        "type": "drop_column",
+                        "column": col,
+                        "description": f"Delete column '{col}' due to excessive missing values ({pct:.1f}%).",
+                        "severity": "major",
+                        "impact": f"Deletes the entire '{col}' column from the dataset."
+                    })
+
 
         # 3. Check outliers in numeric columns
         for col in df.columns:
@@ -173,6 +183,14 @@ class DataCleaner:
                                 fill_val = mode[0] if len(mode) > 0 else "unknown"
                             df[col] = df[col].fillna(fill_val)
                             stats["missing_values_filled"] += null_count
+                
+                # 5. Drop column
+                elif action.startswith("drop_column:"):
+                    col = action.split(":", 1)[1]
+                    if col in df.columns:
+                        df = df.drop(columns=[col])
+                        stats["columns_deleted"] = stats.get("columns_deleted", 0) + 1
+
 
         report = CleaningReportGenerator.generate(stats)
         return df, report
