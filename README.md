@@ -11,10 +11,14 @@ An enterprise-grade, premium intelligent business intelligence and data analytic
 - **Data Cleaning Control Panel**: Displays specific cleaning suggestions (e.g., impute missing values, drop null columns, prune outliers based on IQR, remove duplicates) that can be applied in one click.
 - **Version Rollbacks**: Saves a full historic trail of cleaning runs and allows users to rollback the dataset version at any time.
 
-### 2. 💬 Conversational AI & Natural SQL Agent
-- **LLM Code Generator**: Translates natural language questions into clean, secure SQL queries targeting DuckDB.
-- **AI Executive Insights**: Synthesizes tabular query outputs into concise, executive-level summaries and business recommendations.
-- **Security Check**: Employs query pattern matching to prevent destructive SQL statements (`DELETE`, `DROP`, `UPDATE`, `ALTER`).
+### 2. 💬 ChatGPT-style Conversational Memory & Persistence
+- **Persistent Chat History**: Works exactly like ChatGPT; keeps all previous questions, answers, and visual blocks visible in a scrollable history thread.
+- **Workspace-Specific Memory**: Maintains isolated chat histories per workspace, loading the correct history automatically upon workspace activation.
+- **Database Persistence**: Stores chat history permanently in SQLite (`chat_messages` table) so that it survives page refreshes and application restarts.
+- **Chat UX & Markdown**: Supports smooth scrolling to the latest message, message timestamps, a typing indicator, and custom markdown rendering (including headers, lists, and SQL code block formatting with a copy button).
+- **In-Line Interactive Elements**: Renders SQL viewers, result tables, and Plotly charts directly inside message bubbles.
+- **Chat Search**: Real-time filtering search bar in the console header to find specific queries or SQL code blocks.
+- **Clear Chat**: Clean confirmation modal to delete chat messages for the current workspace without deleting RAG metadata, versions, or datasets.
 
 ### 3. 📊 Smart Interactive Visualizations
 - **Auto-Chart Generation**: Evaluates query results and automatically constructs suitable Plotly.js charts.
@@ -28,9 +32,12 @@ An enterprise-grade, premium intelligent business intelligence and data analytic
 - Configure scheduled data report queries running on intervals (Daily, Weekly, Monthly) or custom cron expressions.
 - Automated jobs compile insights in the background.
 
-### 6. 📥 Enterprise Exports
+### 6. 📥 Enterprise Exports & Wizard
+- **Export Report Wizard**: Configurable modal allowing selection of format (PDF, PPTX, Excel), scope (Current Query or Entire Chat Session), and target sections (Dataset Summary, SQL, Insights, Charts, Tables).
+- **Preview Summary**: Displays counts of queries, tables, and charts to be exported before finalizing the report.
+- **Chart Export Support**: Visual Plotly charts are generated as high-resolution images and embedded directly inside exported PDF and PPTX files.
 - **Clean Datasets**: Download your refined, cleaned datasets directly as **CSV** or **Excel** sheets.
-- **Executive Material**: Download generated data summaries as styled **PDF Reports** or formatted **PPTX Presentation Slides**.
+- **Excel Custom Sheet Export**: Generates tab-separated sheets for each query in scope with formatting, metadata, and custom fits.
 
 ---
 
