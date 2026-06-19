@@ -8,6 +8,19 @@ function ChartView({ chart, resultsData }) {
   const [selectedType, setSelectedType] = useState("");
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
+  const [themeMode, setThemeMode] = useState(document.documentElement.classList.contains("light") ? "light" : "dark");
+
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      const isLight = document.documentElement.classList.contains("light");
+      setThemeMode(isLight ? "light" : "dark");
+    });
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"]
+    });
+    return () => observer.disconnect();
+  }, []);
 
   useEffect(() => {
     if (chart) {
@@ -15,9 +28,10 @@ function ChartView({ chart, resultsData }) {
       if (chart.data) {
         styledData = chart.data.map((trace, i) => {
           const updatedTrace = { ...trace };
-          const themeGreen = "#B8FF2C";
-          const themeGrey = "#71717A";
-          const themeMuted = "#3F3F46";
+          const isLight = themeMode === "light";
+          const themeGreen = isLight ? "#4F46E5" : "#B8FF2C";
+          const themeGrey = isLight ? "#94A3B8" : "#71717A";
+          const themeMuted = isLight ? "#CBD5E1" : "#3F3F46";
           
           if (updatedTrace.type === "pie") {
             if (Array.isArray(updatedTrace.labels) && Array.isArray(updatedTrace.values)) {
@@ -38,9 +52,9 @@ function ChartView({ chart, resultsData }) {
               updatedTrace.y = zipped.map(item => item.yVal);
             }
             if (!updatedTrace.marker) updatedTrace.marker = {};
-            updatedTrace.marker.colors = [
-              themeGreen, "#84CC16", "#C7FF3D", "#2A2A2F", "#1F1F24", "#A1A1AA"
-            ];
+            updatedTrace.marker.colors = isLight 
+              ? [themeGreen, "#6366F1", "#818CF8", "#A5B4FC", "#C7D2FE", "#E0E7FF"]
+              : [themeGreen, "#84CC16", "#C7FF3D", "#2A2A2F", "#1F1F24", "#A1A1AA"];
           } else {
             if (Array.isArray(updatedTrace.x)) {
               const xColors = updatedTrace.x.map(xVal => 
@@ -55,7 +69,7 @@ function ChartView({ chart, resultsData }) {
                 );
                 updatedTrace.marker.pattern = { shape: patterns };
                 updatedTrace.marker.line = {
-                  color: updatedTrace.x.map(xVal => String(xVal || "").includes("⚠️ Unassigned") ? "#A1A1AA" : "#2563eb"),
+                  color: updatedTrace.x.map(xVal => String(xVal || "").includes("⚠️ Unassigned") ? themeGrey : (isLight ? "#4338CA" : "#2563eb")),
                   width: updatedTrace.x.map(xVal => String(xVal || "").includes("⚠️ Unassigned") ? 1.5 : 1.0)
                 };
               }
@@ -81,10 +95,15 @@ function ChartView({ chart, resultsData }) {
     } else {
       setCurrentChart(null);
     }
-  }, [chart]);
+  }, [chart, themeMode]);
 
   useEffect(() => {
     if (currentChart && chartRef.current && window.Plotly) {
+      const isLight = themeMode === "light";
+      const fontColor = isLight ? "#0F172A" : "#e2e8f0";
+      const gridColor = isLight ? "rgba(15, 23, 42, 0.06)" : "rgba(255, 255, 255, 0.05)";
+      const zerolineColor = isLight ? "rgba(15, 23, 42, 0.12)" : "rgba(255, 255, 255, 0.1)";
+
       window.Plotly.newPlot(
         chartRef.current,
         currentChart.data,
@@ -92,16 +111,16 @@ function ChartView({ chart, resultsData }) {
           ...currentChart.layout,
           paper_bgcolor: "rgba(0,0,0,0)",
           plot_bgcolor: "rgba(0,0,0,0)",
-          font: { color: "#e2e8f0", family: "Inter, sans-serif" },
+          font: { color: fontColor, family: "Inter, sans-serif" },
           xaxis: {
             ...currentChart.layout?.xaxis,
-            gridcolor: "rgba(255, 255, 255, 0.05)",
-            zerolinecolor: "rgba(255, 255, 255, 0.1)"
+            gridcolor: gridColor,
+            zerolinecolor: zerolineColor
           },
           yaxis: {
             ...currentChart.layout?.yaxis,
-            gridcolor: "rgba(255, 255, 255, 0.05)",
-            zerolinecolor: "rgba(255, 255, 255, 0.1)"
+            gridcolor: gridColor,
+            zerolinecolor: zerolineColor
           }
         },
         { 
@@ -110,7 +129,7 @@ function ChartView({ chart, resultsData }) {
         }
       );
     }
-  }, [currentChart]);
+  }, [currentChart, themeMode]);
 
   // Handle Plotly resizing on fullscreen toggle
   useEffect(() => {
@@ -131,9 +150,10 @@ function ChartView({ chart, resultsData }) {
         // Apply theme color scale overrides
         const styledData = res.chart.data.map((trace, i) => {
           const updatedTrace = { ...trace };
-          const themeGreen = "#B8FF2C";
-          const themeGrey = "#71717A";
-          const themeMuted = "#3F3F46";
+          const isLight = themeMode === "light";
+          const themeGreen = isLight ? "#4F46E5" : "#B8FF2C";
+          const themeGrey = isLight ? "#94A3B8" : "#71717A";
+          const themeMuted = isLight ? "#CBD5E1" : "#3F3F46";
           if (updatedTrace.type === "pie") {
             if (Array.isArray(updatedTrace.labels) && Array.isArray(updatedTrace.values)) {
               const zipped = updatedTrace.labels.map((lbl, idx) => ({
@@ -153,9 +173,9 @@ function ChartView({ chart, resultsData }) {
               updatedTrace.y = zipped.map(item => item.yVal);
             }
             if (!updatedTrace.marker) updatedTrace.marker = {};
-            updatedTrace.marker.colors = [
-              themeGreen, "#84CC16", "#C7FF3D", "#2A2A2F", "#1F1F24", "#A1A1AA"
-            ];
+            updatedTrace.marker.colors = isLight
+              ? [themeGreen, "#6366F1", "#818CF8", "#A5B4FC", "#C7D2FE", "#E0E7FF"]
+              : [themeGreen, "#84CC16", "#C7FF3D", "#2A2A2F", "#1F1F24", "#A1A1AA"];
           } else {
             if (Array.isArray(updatedTrace.x)) {
               const xColors = updatedTrace.x.map(xVal => 
@@ -170,7 +190,7 @@ function ChartView({ chart, resultsData }) {
                 );
                 updatedTrace.marker.pattern = { shape: patterns };
                 updatedTrace.marker.line = {
-                  color: updatedTrace.x.map(xVal => String(xVal || "").includes("⚠️ Unassigned") ? "#A1A1AA" : "#2563eb"),
+                  color: updatedTrace.x.map(xVal => String(xVal || "").includes("⚠️ Unassigned") ? themeGrey : (isLight ? "#4338CA" : "#2563eb")),
                   width: updatedTrace.x.map(xVal => String(xVal || "").includes("⚠️ Unassigned") ? 1.5 : 1.0)
                 };
               }

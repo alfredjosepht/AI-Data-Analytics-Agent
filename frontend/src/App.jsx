@@ -48,7 +48,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Database,
-  ShieldAlert
+  ShieldAlert,
+  BarChart3
 } from "lucide-react";
 
 function App() {
@@ -476,7 +477,7 @@ function App() {
   return (
     <div className="min-h-screen flex bg-brand-bg text-[#e2e8f0] text-xs">
       {/* 1. Left Sidebar */}
-      <aside className={`transition-all duration-300 relative shrink-0 border-r border-brand-border bg-brand-sidebar backdrop-blur-md flex flex-col h-screen sticky top-0 overflow-hidden ${sidebarCollapsed ? 'w-16 px-2 py-4 gap-3' : 'w-80 p-4 gap-4'}`}>
+      <aside className={`transition-all duration-300 relative shrink-0 border-r border-brand-border bg-brand-sidebar backdrop-blur-md flex flex-col h-screen sticky top-0 overflow-visible ${sidebarCollapsed ? 'w-16 px-2 py-4 gap-3' : 'w-80 p-4 gap-4'}`}>
         {/* Collapse Toggle Handle */}
         <button
           onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
@@ -1022,65 +1023,85 @@ function App() {
                 </div>
               </div>
 
-              {/* Column Quick-Stats Card */}
+              {/* Dataset Structural Graph Card */}
               <div className="glass-panel p-4 border border-brand-border space-y-3">
-                <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted flex items-center gap-1.5">
-                  <Layers className="h-4 w-4 text-brand-lime" />
-                  Column Quick-Stats
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted flex items-center gap-1.5 border-b border-brand-border/40 pb-2">
+                  <BarChart3 className="h-4 w-4 text-brand-lime" />
+                  Dataset Structural Graph
                 </h3>
                 
-                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-[300px] overflow-y-auto pr-1">
                   {profile.profile.columns.map((col, idx) => {
-                    const isNumeric = col.dtype.includes('int') || col.dtype.includes('float');
+                    const fillPercent = Math.round((1 - col.null_percent) * 100);
+                    const nullPercent = Math.round(col.null_percent * 100);
                     
+                    // Cardinality relative to total rows
+                    const totalRows = profile.profile.row_count || 1;
+                    const cardinalityPercent = Math.min(100, Math.round((col.unique_count / totalRows) * 100));
+
                     return (
-                      <div key={idx} className="bg-brand-card/60 hover:bg-brand-card border border-brand-border/40 hover:border-brand-border p-2 rounded transition-colors space-y-1.5">
-                        <div className="flex justify-between items-center min-w-0">
-                          <span className="font-bold text-[10px] text-slate-200 truncate max-w-[120px]" title={col.name}>
-                            {col.name}
-                          </span>
-                          <span className="text-[8px] font-semibold px-1 py-0.5 bg-brand-input/80 border border-brand-border/60 rounded text-brand-muted uppercase">
+                      <div key={idx} className="bg-brand-card/30 p-2 rounded border border-brand-border/30 space-y-1.5 hover:border-brand-border transition-colors">
+                        {/* Name and Data Type */}
+                        <div className="flex justify-between items-center text-[9px] font-bold text-slate-200">
+                          <span className="truncate max-w-[120px]" title={col.name}>{col.name}</span>
+                          <span className="text-[7.5px] font-mono px-1 py-0.5 bg-brand-input border border-brand-border/60 rounded text-brand-muted uppercase">
                             {col.dtype}
                           </span>
                         </div>
                         
-                        {isNumeric ? (
-                          <div className="grid grid-cols-3 gap-1 text-[8px] text-brand-muted border-t border-brand-border/30 pt-1">
-                            <div>
-                              <span className="block font-semibold">Min</span>
-                              <span className="text-slate-300 font-medium">
-                                {col.min !== undefined && col.min !== null ? col.min.toFixed(2).replace(/\.00$/, '') : 'N/A'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="block font-semibold">Max</span>
-                              <span className="text-slate-300 font-medium">
-                                {col.max !== undefined && col.max !== null ? col.max.toFixed(2).replace(/\.00$/, '') : 'N/A'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="block font-semibold">Mean</span>
-                              <span className="text-slate-300 font-medium">
-                                {col.mean !== undefined && col.mean !== null ? col.mean.toFixed(2).replace(/\.00$/, '') : 'N/A'}
-                              </span>
-                            </div>
+                        {/* Completeness Bar (Data Density) */}
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-[7px] text-brand-dimmed">
+                            <span>Completeness Profile</span>
+                            <span>{fillPercent}% Filled</span>
                           </div>
-                        ) : (
-                          <div className="flex justify-between items-center text-[8px] text-brand-muted border-t border-brand-border/30 pt-1">
-                            <span>Unique Values:</span>
-                            <span className="text-slate-300 font-bold">{col.unique_count ?? 'N/A'}</span>
+                          <div className="h-1.5 w-full bg-brand-input border border-brand-border/40 rounded-full overflow-hidden flex">
+                            <div 
+                              className="h-full bg-brand-lime transition-all" 
+                              style={{ width: `${fillPercent}%` }} 
+                              title={`Populated: ${fillPercent}%`}
+                            />
+                            <div 
+                              className="h-full bg-red-500 transition-all" 
+                              style={{ width: `${nullPercent}%` }} 
+                              title={`Missing: ${nullPercent}%`}
+                            />
                           </div>
-                        )}
-                        
-                        {col.null_count > 0 && (
-                          <div className="flex justify-between items-center text-[8px] text-red-400 bg-red-950/20 px-1 py-0.5 rounded border border-red-900/20">
-                            <span>Missing values:</span>
-                            <span className="font-bold">{col.null_count} ({Math.round(col.null_percent * 100)}%)</span>
+                        </div>
+
+                        {/* Cardinality Bar (Unique Values Ratio) */}
+                        <div className="space-y-0.5">
+                          <div className="flex justify-between text-[7px] text-brand-dimmed">
+                            <span>Cardinality: {col.unique_count ?? 'N/A'} unique</span>
+                            <span>{cardinalityPercent}% ratio</span>
                           </div>
-                        )}
+                          <div className="h-1.5 w-full bg-brand-input border border-brand-border/40 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-blue-500 transition-all" 
+                              style={{ width: `${cardinalityPercent}%` }} 
+                              title={`Unique: ${col.unique_count} (${cardinalityPercent}% ratio)`}
+                            />
+                          </div>
+                        </div>
                       </div>
                     );
                   })}
+                </div>
+
+                {/* Graph Legends */}
+                <div className="pt-1.5 border-t border-brand-border/40 flex justify-between items-center text-[7.5px] text-brand-muted flex-wrap gap-1">
+                  <div className="flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-brand-lime inline-block" />
+                    <span>Populated</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-red-500 inline-block" />
+                    <span>Missing</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <span className="h-1.5 w-1.5 rounded-full bg-blue-500 inline-block" />
+                    <span>Cardinality</span>
+                  </div>
                 </div>
               </div>
             </>
