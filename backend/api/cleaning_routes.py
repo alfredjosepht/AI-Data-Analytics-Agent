@@ -75,7 +75,14 @@ def clean_workspace(workspace_id: int, request: CleanRequest):
         os.makedirs(clean_folder, exist_ok=True)
         versioned_file_name = f"cleaned_{table_name}_v{current_version_num}.csv"
         versioned_path = os.path.join(clean_folder, versioned_file_name)
-        cleaned_df.to_csv(versioned_path, index=False)
+        try:
+            cleaned_df.to_csv(versioned_path, index=False)
+        except PermissionError:
+            import time
+            timestamp = int(time.time())
+            versioned_file_name = f"cleaned_{table_name}_v{current_version_num}_{timestamp}.csv"
+            versioned_path = os.path.join(clean_folder, versioned_file_name)
+            cleaned_df.to_csv(versioned_path, index=False)
 
         desc = f"Cleaned version {current_version_num} applying actions: {', '.join(request.approved_actions)}"
         sqlite_manager.create_version(workspace_id, current_version_num, versioned_path, table_name, desc)
