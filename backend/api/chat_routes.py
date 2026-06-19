@@ -3,7 +3,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import os
 
-from backend.agents.query_agent.query_agent import QueryAgent
+from backend.agents.query_agent.query_agent import QueryAgent, sanitize_json_values
 from backend.database.sqlite_manager import sqlite_manager
 
 router = APIRouter(
@@ -50,10 +50,10 @@ def get_chat_history(workspace_id: int):
             "chart": chart_data,
             "created_at": chat.get("created_at")
         })
-    return {
+    return sanitize_json_values({
         "status": "success",
         "chat_history": parsed_history
-    }
+    })
 
 
 @router.get("/workspaces/{workspace_id}/chat_messages")
@@ -86,10 +86,10 @@ def get_chat_messages(workspace_id: int):
             "chart": chart_data,
             "created_at": msg.get("created_at")
         })
-    return {
+    return sanitize_json_values({
         "status": "success",
         "chat_messages": parsed_messages
-    }
+    })
 
 
 @router.delete("/workspaces/{workspace_id}/chat_history")

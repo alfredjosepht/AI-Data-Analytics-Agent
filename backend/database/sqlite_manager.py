@@ -265,7 +265,7 @@ class SQLiteManager:
 
         cursor.execute(
             """
-            SELECT id, name, file_name, file_path, table_name, created_at
+            SELECT id, name, file_name, file_path, table_name, created_at, metadata_json
             FROM workspaces
             ORDER BY created_at DESC
             """
@@ -275,14 +275,34 @@ class SQLiteManager:
 
         workspaces = []
 
+        from backend.agents.quality_agent import QualityAgent
+
         for row in rows:
+            ws_id = row[0]
+            metadata = json.loads(row[6]) if row[6] else {}
+            row_count = metadata.get("row_count")
+            overall_score = None
+
+            if row[4]:  # table_name
+                try:
+                    profile_res = QualityAgent.profile_workspace(ws_id)
+                    if profile_res and profile_res.get("profile"):
+                        overall_score = profile_res["profile"].get("overall_score")
+                        if row_count is None:
+                            row_count = profile_res["profile"].get("row_count")
+                except Exception as e:
+                    print(f"Error profiling workspace {ws_id} in list_workspaces: {e}")
+
             workspaces.append({
-                "id": row[0],
+                "id": ws_id,
                 "name": row[1],
                 "file_name": row[2],
                 "file_path": row[3],
                 "table_name": row[4],
-                "created_at": row[5]
+                "created_at": row[5],
+                "row_count": row_count,
+                "overall_score": overall_score,
+                "metadata": metadata
             })
 
         return workspaces
@@ -357,6 +377,19 @@ class SQLiteManager:
         self.conn.commit()
 
     def create_version(self, workspace_id, version_num, file_path, table_name, description):
+        try:
+            if file_path and os.path.exists(file_path):
+                import pandas as pd
+                tmp_df = pd.read_csv(file_path, nrows=0)
+                cols_count = len(tmp_df.columns)
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                    rows_count = sum(1 for _ in f) - 1
+                stats_str = f" [Rows: {rows_count}, Columns: {cols_count}]"
+                if stats_str not in description:
+                    description = f"{description}{stats_str}"
+        except Exception as e:
+            print(f"Error calculating stats inside create_version: {e}")
+
         cursor = self.conn.cursor()
         cursor.execute(
             """
@@ -367,6 +400,7 @@ class SQLiteManager:
         )
         self.conn.commit()
         return cursor.lastrowid
+
 
     def get_versions(self, workspace_id):
         cursor = self.conn.cursor()
@@ -402,6 +436,18 @@ class SQLiteManager:
             WHERE id = ?
             """,
             (table_name, json.dumps(schema) if schema else None, json.dumps(metadata) if metadata else None, workspace_id)
+        )
+        self.conn.commit()
+
+    def update_cleaning_info(self, workspace_id, cleaning_report, cleaning_approved=1):
+        cursor = self.conn.cursor()
+        cursor.execute(
+            """
+            UPDATE workspaces
+            SET cleaning_report_json = ?, cleaning_approved = ?
+            WHERE id = ?
+            """,
+            (json.dumps(cleaning_report) if cleaning_report is not None else None, int(cleaning_approved), workspace_id)
         )
         self.conn.commit()
 

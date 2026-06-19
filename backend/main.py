@@ -24,6 +24,8 @@ from backend.api.scheduler_routes import router as scheduler_router
 app = FastAPI(
     title="AI Data Analytics Agent"
 )
+# Force hot reload of modules
+
 
 
 app.add_middleware(
@@ -101,5 +103,5 @@ def on_startup():
 def root():
 
     return {
-        "message": "AI Data Analytics Agent Running"
+        "message": "AI Data Analytics Agent Running - Refactored!"
     }

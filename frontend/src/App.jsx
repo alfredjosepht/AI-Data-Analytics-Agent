@@ -26,7 +26,8 @@ import {
   exportWorkspaceHtml,
   listWorkspaces,
   getChatMessages,
-  exportReportWizard
+  exportReportWizard,
+  uploadFile
 } from "./services/api";
 import { 
   Bot, 
@@ -43,7 +44,11 @@ import {
   Sun,
   Moon,
   Search,
-  AlertTriangle
+  AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  Database,
+  ShieldAlert
 } from "lucide-react";
 
 function App() {
@@ -74,8 +79,18 @@ function App() {
   const [renameVal, setRenameVal] = useState("");
   const [wsToDelete, setWsToDelete] = useState(null);
   const [showCleaningConfirmModal, setShowCleaningConfirmModal] = useState(false);
+  const [showCleaningModal, setShowCleaningModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+
+  // Dataset Upload / Replacement States
+  const [duplicateWorkspace, setDuplicateWorkspace] = useState(null);
+  const [fileToUpload, setFileToUpload] = useState(null);
+  const [uploadLoading, setUploadLoading] = useState(false);
+  const [uploadRecommendations, setUploadRecommendations] = useState(null);
+  const [uploadWorkspaceId, setUploadWorkspaceId] = useState(null);
+  const [uploadSelectedActions, setUploadSelectedActions] = useState([]);
 
   const [showExportModal, setShowExportModal] = useState(false);
   const [exportStep, setExportStep] = useState(1);
@@ -313,6 +328,7 @@ function App() {
       if (res.status === "success") {
         showToast("Data cleaning successfully applied!");
         setWorkspaceRefreshTrigger(prev => prev + 1);
+        setShowCleaningModal(false);
       }
     } catch (err) {
       console.error(err);
@@ -320,6 +336,60 @@ function App() {
     } finally {
       setCleaningLoading(false);
     }
+  };
+
+  const handleIngestFile = async (selectedFile, replaceId = null) => {
+    setUploadLoading(true);
+    setDuplicateWorkspace(null);
+
+    try {
+      if (replaceId) {
+        await deleteWorkspace(replaceId);
+        showToast("Old workspace replaced. Ingesting new dataset...");
+      }
+
+      const result = await uploadFile(selectedFile);
+      handleWorkspaceActivated(result);
+      setWorkspaceRefreshTrigger((prev) => prev + 1);
+      showToast("Dataset ingested successfully!");
+
+      if (result.recommendations && result.recommendations.length > 0 && !result.cleaning_approved) {
+        setUploadRecommendations(result.recommendations);
+        setUploadWorkspaceId(result.workspace_id);
+        setUploadSelectedActions(result.recommendations.map(r => r.id));
+      }
+    } catch (err) {
+      console.error(err);
+      const message = err?.response?.data?.detail || err?.message || "Upload failed";
+      showToast(`Upload failed: ${message}`, "error");
+    } finally {
+      setUploadLoading(false);
+      setFileToUpload(null);
+    }
+  };
+
+  const handleApplyUploadCleaning = async () => {
+    if (!uploadWorkspaceId) return;
+    setUploadLoading(true);
+    try {
+      const res = await cleanWorkspace(uploadWorkspaceId, uploadSelectedActions);
+      if (res.status === "success") {
+        showToast("Data cleaning successfully applied!");
+        handleWorkspaceActivated(res.workspace);
+        setUploadRecommendations(null);
+        setWorkspaceRefreshTrigger((prev) => prev + 1);
+      }
+    } catch (err) {
+      console.error(err);
+      showToast("Failed to apply cleaning action.", "error");
+    } finally {
+      setUploadLoading(false);
+    }
+  };
+
+  const handleRejectUploadCleaning = () => {
+    setUploadRecommendations(null);
+    showToast("Dataset loaded in raw state.");
   };
 
   const handleCreateSchedule = async () => {
@@ -404,45 +474,66 @@ function App() {
   );
 
   return (
-    <div className="min-h-screen flex bg-[#080b11] text-[#e2e8f0] text-xs">
+    <div className="min-h-screen flex bg-brand-bg text-[#e2e8f0] text-xs">
       {/* 1. Left Sidebar */}
-      <aside className="w-80 shrink-0 border-r border-slate-900 bg-[#0c1017]/85 backdrop-blur-md p-5 flex flex-col justify-between">
-        <div className="space-y-5">
-          <div className="flex items-center justify-between px-1">
-            <div className="flex items-center gap-2.5">
-              <div className="h-8 w-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-blue-500/20">
-                <Bot className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <h1 className="text-xs font-extrabold uppercase tracking-widest text-white leading-tight">
-                  AI-Data-Analytics-Agent
-                </h1>
-                <p className="text-[9px] text-slate-500">Intelligent Analysis Platform</p>
-              </div>
-            </div>
+      <aside className={`transition-all duration-300 relative shrink-0 border-r border-brand-border bg-brand-sidebar backdrop-blur-md flex flex-col h-screen sticky top-0 overflow-hidden ${sidebarCollapsed ? 'w-16 px-2 py-4 gap-3' : 'w-80 p-4 gap-4'}`}>
+        {/* Collapse Toggle Handle */}
+        <button
+          onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
+          className="absolute -right-3 top-6 z-20 p-1 rounded-full border border-brand-border bg-brand-card hover:bg-brand-card-hover text-brand-muted hover:text-brand-lime shadow-md transition-all cursor-pointer"
+          title={sidebarCollapsed ? "Expand Sidebar" : "Collapse Sidebar"}
+        >
+          {sidebarCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+        </button>
 
-            {/* Dark/Light Toggle */}
-            <button
-              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-              className="p-1.5 rounded-lg border border-slate-800 bg-[#0c1017] hover:bg-slate-800 text-slate-400 hover:text-white transition-all"
-              title="Toggle Dark/Light Mode"
-            >
-              {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-            </button>
+        {/* Header */}
+        <div className={`flex items-center justify-between px-1 shrink-0 ${sidebarCollapsed ? 'justify-center' : ''}`}>
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 shrink-0 rounded-lg bg-brand-lime flex items-center justify-center shadow-lg shadow-brand-lime/20 animate-pulse">
+              <Bot className="h-5 w-5 text-black" />
+            </div>
+            {!sidebarCollapsed && (
+              <div>
+                <h1 className="text-xs font-black uppercase tracking-widest text-white leading-tight">
+                  AI-Analytics
+                </h1>
+                <p className="text-[9px] text-brand-dimmed">Intelligent Data Platform</p>
+              </div>
+            )}
           </div>
 
-          {/* Ctrl+K Search Bar Trigger */}
+          {!sidebarCollapsed && (
+            /* Dark/Light Toggle */
+            <button
+              onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+              className="p-1.5 rounded-lg border border-brand-border bg-brand-card hover:bg-brand-card-hover text-brand-muted hover:text-white transition-all cursor-pointer"
+              title="Toggle Dark/Light Mode"
+            >
+              {theme === "dark" ? <Sun className="h-3.5 w-3.5 text-brand-lime" /> : <Moon className="h-3.5 w-3.5" />}
+            </button>
+          )}
+        </div>
+
+        {/* Search Bar */}
+        <div className="shrink-0">
           <button
             onClick={() => setShowSearchModal(true)}
-            className="w-full flex items-center justify-between px-3 py-1.5 rounded-lg border border-slate-850 bg-slate-950/40 text-slate-500 hover:border-slate-800 hover:text-slate-400 transition-all text-[11px]"
+            className={`w-full flex items-center rounded-lg border border-brand-border bg-brand-input text-brand-dimmed hover:border-brand-muted/30 hover:text-brand-muted transition-all cursor-pointer ${
+              sidebarCollapsed ? 'justify-center py-2 px-1' : 'justify-between px-3 py-2 text-[11px]'
+            }`}
           >
             <span className="flex items-center gap-1.5">
-              <Search className="h-3.5 w-3.5" />
-              Search workspaces...
+              <Search className="h-3.5 w-3.5 text-brand-lime" />
+              {!sidebarCollapsed && "Search workspaces..."}
             </span>
-            <kbd className="text-[9px] bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800">Ctrl+K</kbd>
+            {!sidebarCollapsed && (
+              <kbd className="text-[9px] bg-brand-card px-1.5 py-0.5 rounded border border-brand-border text-brand-dimmed">Ctrl+K</kbd>
+            )}
           </button>
+        </div>
 
+        {/* Workspace List Section */}
+        <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
           <WorkspaceList
             activeWorkspaceId={activeWorkspaceId}
             onWorkspaceActivated={handleWorkspaceActivated}
@@ -450,43 +541,85 @@ function App() {
             onRenameWorkspace={(ws) => { setWsToRename(ws); setRenameVal(ws.name); }}
             onDuplicateWorkspace={handleDuplicateWorkspace}
             onDeleteWorkspace={(ws) => setWsToDelete(ws)}
+            collapsed={sidebarCollapsed}
           />
+        </div>
 
+        {/* Dataset Replacement Warning Card */}
+        {!sidebarCollapsed && duplicateWorkspace && (
+          <div className="shrink-0 glass-panel p-4 border border-brand-border bg-brand-card/90 flex flex-col gap-2 max-h-[150px] overflow-y-auto scrollbar-thin">
+            <div className="flex items-center gap-2 text-brand-warning">
+              <AlertTriangle className="h-4.5 w-4.5 text-brand-warning shrink-0" />
+              <span className="text-[11px] font-black uppercase tracking-wider">Confirm Replacement</span>
+            </div>
+            <p className="text-[10px] text-brand-muted leading-relaxed">
+              A dataset named <strong className="text-white">{duplicateWorkspace.file_name}</strong> already exists as <strong className="text-white">{duplicateWorkspace.name.toUpperCase()}</strong>.
+              Replacing it will permanently delete existing metadata, charts, reports, and version history.
+            </p>
+            <div className="flex gap-2 mt-1">
+              <button
+                onClick={() => handleIngestFile(fileToUpload, duplicateWorkspace.id)}
+                disabled={uploadLoading}
+                className="flex-1 bg-brand-error hover:bg-red-500 text-white font-bold py-1.5 rounded text-[10px] transition-colors cursor-pointer text-center"
+              >
+                Overwrite
+              </button>
+              <button
+                onClick={() => { setDuplicateWorkspace(null); setFileToUpload(null); }}
+                disabled={uploadLoading}
+                className="flex-1 bg-brand-input border border-brand-border hover:bg-brand-card text-brand-muted font-bold py-1.5 rounded text-[10px] transition-colors cursor-pointer text-center"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Upload Section */}
+        <div className="shrink-0">
           <UploadPanel
             workspaces={workspaces}
-            setUploadInfo={handleWorkspaceActivated}
-            onUploadSuccess={() => setWorkspaceRefreshTrigger((prev) => prev + 1)}
-            showToast={showToast}
+            onIngestStart={(file) => handleIngestFile(file)}
+            onDuplicateDetected={(dup, file) => { setDuplicateWorkspace(dup); setFileToUpload(file); }}
+            uploadLoading={uploadLoading}
+            collapsed={sidebarCollapsed}
+            fileToUpload={fileToUpload}
+            setFileToUpload={setFileToUpload}
           />
+        </div>
 
-          {activeWorkspace && (
-            <div className="space-y-2.5">
-              <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-400 flex items-center gap-1.5">
-                  <Clock className="h-3.5 w-3.5 text-blue-500" />
-                  Scheduled Jobs
-                </span>
+        {/* Scheduled Jobs Section */}
+        {activeWorkspace && (
+          <div className="flex-1 min-h-0 flex flex-col gap-2 overflow-hidden">
+            <div className={`flex items-center justify-between shrink-0 ${sidebarCollapsed ? 'justify-center' : ''}`}>
+              <span className="text-[10px] uppercase tracking-wider font-semibold text-brand-muted flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-brand-lime" />
+                {!sidebarCollapsed && "Scheduled Jobs"}
+              </span>
+              {!sidebarCollapsed && (
                 <button 
                   onClick={() => setShowScheduleModal(true)}
-                  className="p-1 rounded bg-[#0f172a] hover:bg-slate-800 border border-slate-800 text-blue-400 transition-colors"
+                  className="p-1 rounded bg-brand-card hover:bg-brand-card-hover border border-brand-border text-brand-lime transition-colors cursor-pointer"
                 >
                   <Plus className="h-3 w-3" />
                 </button>
-              </div>
+              )}
+            </div>
 
-              <div className="max-h-[130px] overflow-y-auto space-y-1.5 pr-1">
+            {!sidebarCollapsed && (
+              <div className="flex-1 min-h-0 overflow-y-auto space-y-1.5 pr-1">
                 {schedules.length === 0 ? (
-                  <p className="text-[10px] text-slate-500 italic px-1">No scheduled reports.</p>
+                  <p className="text-[10px] text-brand-dimmed italic px-1">No scheduled reports.</p>
                 ) : (
                   schedules.map((s) => (
-                    <div key={s.id} className="flex items-center justify-between p-2 bg-[#0f172a]/60 border border-slate-800 rounded">
+                    <div key={s.id} className="flex items-center justify-between p-2 bg-brand-card/60 border border-brand-border rounded">
                       <div className="min-w-0 pr-2">
                         <p className="font-bold text-slate-300 truncate text-[11px]">{s.name}</p>
-                        <p className="text-[9px] text-slate-500 truncate">Next: {s.next_run || "N/A"}</p>
+                        <p className="text-[9px] text-brand-dimmed truncate">Next: {s.next_run || "N/A"}</p>
                       </div>
                       <button 
                         onClick={() => handleDeleteSchedule(s.id)}
-                        className="text-slate-500 hover:text-red-400 transition-colors shrink-0"
+                        className="text-brand-muted hover:text-red-400 transition-colors shrink-0 cursor-pointer"
                       >
                         <Trash2 className="h-3 w-3" />
                       </button>
@@ -494,67 +627,71 @@ function App() {
                   ))
                 )}
               </div>
-            </div>
-          )}
-        </div>
+            )}
+          </div>
+        )}
 
-        <div className="pt-4 border-t border-slate-900/60 text-center">
-          <p className="text-[9px] text-slate-500 font-medium">AI-Data-Analytics-Agent Platform v1.2.0 • Gemini 3.5 Flash</p>
+        {/* Footer */}
+        <div className="shrink-0 pt-2 border-t border-brand-border text-center">
+          <p className="text-[9px] text-brand-dimmed font-medium truncate">
+            {sidebarCollapsed ? "v1.2" : "Platform v1.2.0 • Powered by Gemini & DuckDB"}
+          </p>
         </div>
       </aside>
 
       {/* 2. Center Panel */}
-      <main className="flex-1 overflow-y-auto p-6 space-y-5">
+      <main className="flex-1 overflow-y-auto p-6 space-y-5 bg-brand-bg">
         {activeWorkspace ? (
           <>
-            <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-4 border-b border-brand-border pb-4">
               <div>
-                <h2 className="text-base font-extrabold text-white tracking-tight uppercase">
+                <h2 className="text-sm font-black text-white tracking-tight uppercase flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-brand-lime animate-pulse" />
                   WORKSPACE: {activeWorkspace.name}
                 </h2>
-                <p className="text-[10px] text-slate-400">
+                <p className="text-[10px] text-brand-muted">
                   DuckDB Engine • Source: {activeWorkspace.file_name}
                 </p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-1.5">
                 <button
                   onClick={() => openExportWizard("pdf")}
-                  className="bg-[#0f172a] hover:bg-slate-800 text-slate-200 border border-slate-800 text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5"
+                  className="bg-brand-card hover:bg-brand-card-hover text-brand-muted hover:text-white border border-brand-border text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Download className="h-3.5 w-3.5 text-blue-400" />
+                  <Download className="h-3.5 w-3.5 text-brand-lime" />
                   PDF Report
                 </button>
                 <button
                   onClick={() => openExportWizard("pptx")}
-                  className="bg-[#0f172a] hover:bg-slate-800 text-slate-200 border border-slate-800 text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5"
+                  className="bg-brand-card hover:bg-brand-card-hover text-brand-muted hover:text-white border border-brand-border text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Download className="h-3.5 w-3.5 text-orange-400" />
                   PPTX Slides
                 </button>
                 <button
                   onClick={() => { exportWorkspaceDocx(activeWorkspaceId); showToast("Generating DOCX document..."); }}
-                  className="bg-[#0f172a] hover:bg-slate-800 text-slate-200 border border-slate-800 text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5"
+                  className="bg-brand-card hover:bg-brand-card-hover text-brand-muted hover:text-white border border-brand-border text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Download className="h-3.5 w-3.5 text-indigo-400" />
                   DOCX Report
                 </button>
                 <button
                   onClick={() => { exportWorkspaceHtml(activeWorkspaceId); showToast("Generating HTML file..."); }}
-                  className="bg-[#0f172a] hover:bg-slate-800 text-slate-200 border border-slate-800 text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5"
+                  className="bg-brand-card hover:bg-brand-card-hover text-brand-muted hover:text-white border border-brand-border text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Download className="h-3.5 w-3.5 text-red-400" />
                   HTML Report
                 </button>
                 <button
                   onClick={() => { exportWorkspaceCsv(activeWorkspaceId); showToast("Downloading CSV..."); }}
-                  className="bg-[#0f172a] hover:bg-slate-800 text-slate-200 border border-slate-800 text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5"
+                  className="bg-brand-card hover:bg-brand-card-hover text-brand-muted hover:text-white border border-brand-border text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Download className="h-3.5 w-3.5 text-green-400" />
+                  <Download className="h-3.5 w-3.5 text-brand-lime" />
                   CSV Data
                 </button>
                 <button
                   onClick={() => openExportWizard("excel")}
-                  className="bg-[#0f172a] hover:bg-slate-800 text-slate-200 border border-slate-800 text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5"
+                  className="bg-brand-card hover:bg-brand-card-hover text-brand-muted hover:text-white border border-brand-border text-[10px] px-3 py-1.5 rounded-lg font-medium transition-colors flex items-center gap-1.5 cursor-pointer"
                 >
                   <Download className="h-3.5 w-3.5 text-emerald-400" />
                   Excel Data
@@ -562,18 +699,200 @@ function App() {
               </div>
             </div>
 
+            {/* KPI Statistics Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
+              <div className="glass-panel p-4 border border-brand-border relative overflow-hidden group">
+                <span className="text-[10px] text-brand-muted font-semibold uppercase tracking-wider block">Rows Loaded</span>
+                <span className="text-xl font-extrabold text-white mt-1 block">
+                  {profile?.row_count?.toLocaleString() || activeWorkspace.row_count?.toLocaleString() || "0"}
+                </span>
+                <div className="absolute right-4 bottom-4 text-brand-lime/15 group-hover:text-brand-lime/30 transition-colors">
+                  <Layers className="h-8 w-8" />
+                </div>
+              </div>
+              <div className="glass-panel p-4 border border-brand-border relative overflow-hidden group">
+                <span className="text-[10px] text-brand-muted font-semibold uppercase tracking-wider block">Columns</span>
+                <span className="text-xl font-extrabold text-white mt-1 block">
+                  {profile?.column_count || "0"}
+                </span>
+                <div className="absolute right-4 bottom-4 text-brand-lime/15 group-hover:text-brand-lime/30 transition-colors">
+                  <Database className="h-8 w-8" />
+                </div>
+              </div>
+              <div className="glass-panel p-4 border border-brand-border relative overflow-hidden group">
+                <span className="text-[10px] text-brand-muted font-semibold uppercase tracking-wider block">Data Quality</span>
+                <span className={`text-xl font-extrabold mt-1 block ${getQualityColor(profile?.overall_score || activeWorkspace.overall_score)}`}>
+                  {profile?.overall_score !== undefined 
+                    ? `${Math.round(profile.overall_score)}%` 
+                    : activeWorkspace.overall_score !== undefined && activeWorkspace.overall_score !== null
+                      ? `${Math.round(activeWorkspace.overall_score)}%`
+                      : "N/A"
+                  }
+                </span>
+                <div className="absolute right-4 bottom-4 text-brand-lime/15 group-hover:text-brand-lime/30 transition-colors">
+                  <Activity className="h-8 w-8" />
+                </div>
+              </div>
+              <div className="glass-panel p-4 border border-brand-border relative overflow-hidden group">
+                <span className="text-[10px] text-brand-muted font-semibold uppercase tracking-wider block">Reports & Jobs</span>
+                <span className="text-xl font-extrabold text-white mt-1 block">
+                  {(reports?.length || 0) + (schedules?.length || 0)}
+                </span>
+                <div className="absolute right-4 bottom-4 text-brand-lime/15 group-hover:text-brand-lime/30 transition-colors">
+                  <FileText className="h-8 w-8" />
+                </div>
+              </div>
+            </div>
+
             <ChatPanel workspaceId={activeWorkspaceId} setResponse={setResponse} />
+
+            {/* Additional Content Grid below AI Analytics Console */}
+            {profile && profile.profile && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-6">
+                {/* 1. Dataset Schema View Card */}
+                <div className="glass-panel p-4 border border-brand-border flex flex-col min-w-0">
+                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted flex items-center gap-1.5 border-b border-brand-border/60 pb-2 mb-3">
+                    <Layers className="h-4 w-4 text-brand-lime" />
+                    Dataset Schema View
+                  </h3>
+                  <div className="space-y-1.5 max-h-[200px] overflow-y-auto pr-1">
+                    {profile.profile.columns.map((c) => (
+                      <div key={c.name} className="flex items-center justify-between border-b border-brand-border/40 py-1.5 text-[10px]">
+                        <span className="font-bold text-slate-300 truncate max-w-[150px]">{c.name}</span>
+                        <span className="text-brand-dimmed font-mono text-[9px] font-medium">{c.dtype}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* 2. Version Rollbacks Card */}
+                <div className="glass-panel p-4 border border-brand-border flex flex-col min-w-0">
+                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted flex items-center gap-1.5 border-b border-brand-border/60 pb-2 mb-3">
+                    <Clock className="h-4 w-4 text-brand-lime" />
+                    Version Rollbacks
+                  </h3>
+                  {versions.length > 0 ? (
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                      {versions.map((v) => (
+                        <div key={v.id} className="p-2.5 bg-brand-input border border-brand-border rounded flex flex-col gap-1 text-[10px]">
+                          <div className="flex items-center justify-between font-semibold">
+                            <span className="text-brand-lime">Version {v.version_num}</span>
+                            <span className="text-brand-dimmed text-[9px]">{v.created_at.split(" ")[0]}</span>
+                          </div>
+                          <p className="text-brand-muted text-[9px] leading-tight">{v.description}</p>
+                          <button
+                            onClick={() => handleRollback(v.version_num)}
+                            className="w-full mt-1 bg-brand-card border border-brand-border hover:bg-brand-card-hover text-[9px] text-slate-200 font-bold py-1 rounded transition-colors cursor-pointer"
+                          >
+                            Rollback
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-brand-dimmed italic p-3 bg-brand-input/40 border border-brand-border rounded text-center">
+                      No versions available yet.
+                    </div>
+                  )}
+                </div>
+
+                {/* 3. Reports Archive Card */}
+                <div className="glass-panel p-4 border border-brand-border flex flex-col min-w-0">
+                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted flex items-center gap-1.5 border-b border-brand-border/60 pb-2 mb-3">
+                    <FileSpreadsheet className="h-4 w-4 text-brand-lime" />
+                    Reports Archive
+                  </h3>
+                  {reports.length > 0 ? (
+                    <div className="space-y-2 max-h-[200px] overflow-y-auto pr-1">
+                      {reports.map((rep) => (
+                        <div key={rep.id} className="flex items-center justify-between p-2 bg-brand-input border border-brand-border rounded text-[9px]">
+                          <div className="min-w-0 pr-1">
+                            <p className="font-bold text-slate-355 truncate">{rep.title}</p>
+                            <p className="text-[8px] text-brand-dimmed">{rep.created_at}</p>
+                          </div>
+                          <a 
+                            href={`http://127.0.0.1:8000/${rep.file_path}`} 
+                            download 
+                            target="_blank"
+                            className="text-brand-lime hover:text-brand-lime-hover transition-colors cursor-pointer p-1 rounded hover:bg-brand-card"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-[10px] text-brand-dimmed italic p-3 bg-brand-input/40 border border-brand-border rounded text-center">
+                      No reports generated.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </>
         ) : (
-          <div className="h-full flex flex-col items-center justify-center text-center space-y-4">
-            <div className="h-12 w-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-blue-500">
-              <Bot className="h-6 w-6 animate-pulse" />
-            </div>
-            <div>
-              <h3 className="text-sm font-bold text-white">No active workspace</h3>
-              <p className="text-xs text-slate-400 max-w-sm mx-auto mt-1">
-                Upload or select a dataset inside the Left Sidebar to initiate analytics.
+          /* Global Landing Area with stats KPI cards when no workspace is active */
+          <div className="h-full flex flex-col justify-center max-w-4xl mx-auto py-12 space-y-8">
+            <div className="text-center space-y-3">
+              <div className="inline-flex h-12 w-12 rounded-2xl bg-brand-card border border-brand-border items-center justify-center text-brand-lime shadow-lg shadow-brand-lime/10">
+                <Bot className="h-6 w-6 animate-pulse" />
+              </div>
+              <h2 className="text-2xl font-black text-white tracking-tight uppercase text-gradient">
+                Intelligent Data Analytics
+              </h2>
+              <p className="text-xs text-brand-muted max-w-md mx-auto">
+                Unlock insights from your datasets using natural language queries, automated data cleaning, and premium visualization reports.
               </p>
+            </div>
+
+            {/* Global KPI stats grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
+              <div className="glass-panel p-5 border border-brand-border relative overflow-hidden group">
+                <span className="text-[10px] text-brand-muted font-semibold uppercase tracking-wider block">Total Workspaces</span>
+                <span className="text-2xl font-black text-white mt-2 block">{workspaces.length}</span>
+                <p className="text-[9px] text-brand-dimmed mt-1">Active data workspaces loaded</p>
+                <div className="absolute right-4 bottom-4 text-brand-lime/15 group-hover:text-brand-lime/30 transition-colors">
+                  <Layers className="h-10 w-10" />
+                </div>
+              </div>
+              <div className="glass-panel p-5 border border-brand-border relative overflow-hidden group">
+                <span className="text-[10px] text-brand-muted font-semibold uppercase tracking-wider block">Total Rows Analyzed</span>
+                <span className="text-2xl font-black text-white mt-2 block">
+                  {workspaces.reduce((acc, w) => acc + (w.row_count || 0), 0).toLocaleString()}
+                </span>
+                <p className="text-[9px] text-brand-dimmed mt-1">Rows loaded across all datasets</p>
+                <div className="absolute right-4 bottom-4 text-brand-lime/15 group-hover:text-brand-lime/30 transition-colors">
+                  <Database className="h-10 w-10" />
+                </div>
+              </div>
+              <div className="glass-panel p-5 border border-brand-border relative overflow-hidden group">
+                <span className="text-[10px] text-brand-muted font-semibold uppercase tracking-wider block">Avg Quality Score</span>
+                <span className="text-2xl font-black text-brand-lime mt-2 block">
+                  {workspaces.filter(w => w.overall_score !== null && w.overall_score !== undefined).length > 0
+                    ? `${Math.round(workspaces.reduce((acc, w) => acc + (w.overall_score || 0), 0) / workspaces.filter(w => w.overall_score !== null && w.overall_score !== undefined).length)}%`
+                    : "100%"
+                  }
+                </span>
+                <p className="text-[9px] text-brand-dimmed mt-1">Average data profile health score</p>
+                <div className="absolute right-4 bottom-4 text-brand-lime/15 group-hover:text-brand-lime/30 transition-colors">
+                  <Activity className="h-10 w-10" />
+                </div>
+              </div>
+            </div>
+
+            <div className="glass-panel p-6 border border-brand-border text-center space-y-4">
+              <p className="text-xs text-brand-muted">
+                To get started, upload raw CSV, JSON or Excel files, or click any workspace in the sidebar.
+              </p>
+              <div className="flex justify-center gap-3">
+                <button
+                  onClick={() => setShowSearchModal(true)}
+                  className="px-4 py-2 rounded-lg bg-brand-card hover:bg-brand-card-hover border border-brand-border text-brand-muted hover:text-white transition-all text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Search className="h-4 w-4 text-brand-lime" />
+                  Search Workspaces (Ctrl+K)
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -581,225 +900,240 @@ function App() {
 
       {/* 3. Right Sidebar */}
       {activeWorkspace && (
-        <aside className="w-80 shrink-0 border-l border-slate-900 bg-[#0c1017]/85 backdrop-blur-md p-5 overflow-y-auto space-y-5">
-          {/* Data Quality Score Card */}
-          {profile && profile.profile && (
-            <div className="glass-panel p-4 border border-slate-800/80 space-y-3">
-              <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Activity className="h-4 w-4 text-emerald-400" />
-                Data Quality Score
-              </h3>
-              
-              <div className="flex items-center gap-3.5">
-                <div className="h-12 w-12 rounded-full border-2 border-slate-800 flex items-center justify-center shrink-0 bg-slate-950">
-                  <span className={`text-xs font-extrabold ${getQualityColor(profile.profile.overall_score)}`}>
-                    {Math.round(profile.profile.overall_score)}
-                  </span>
+        <aside className="w-80 shrink-0 border-l border-brand-border bg-brand-sidebar backdrop-blur-md p-5 h-screen sticky top-0 overflow-y-auto space-y-5">
+          {!profile || !profile.profile ? (
+            <div className="space-y-5">
+              {/* Shimmer 1: Quality Score */}
+              <div className="glass-panel p-4 border border-brand-border space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="h-3 w-3 rounded bg-brand-border animate-pulse" />
+                  <div className="h-3 w-24 bg-brand-border rounded animate-pulse" />
                 </div>
-                <div className="min-w-0">
-                  <p className="text-xs font-semibold text-slate-350">
-                    Rating: {profile.profile.overall_score >= 80 ? "Premium" : profile.profile.overall_score >= 50 ? "Moderate" : "Poor"}
-                  </p>
-                  <p className="text-[9px] text-slate-500 leading-tight">
-                    Audited empty rows, duplicates, and numeric outliers.
-                  </p>
+                <div className="flex items-center gap-3">
+                  <div className="h-12 w-12 rounded-full border border-brand-border bg-brand-card animate-pulse shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="h-3 w-16 bg-brand-border rounded animate-pulse" />
+                    <div className="h-2 w-28 bg-brand-border rounded animate-pulse" />
+                  </div>
                 </div>
               </div>
-
-              {profile.profile.issues && profile.profile.issues.length > 0 && (
-                <div className="space-y-1 pt-2 border-t border-slate-850">
-                  <p className="text-[9px] font-bold text-slate-400">Issues Logged:</p>
-                  <ul className="text-[9px] text-slate-400 space-y-0.5">
-                    {profile.profile.issues.map((iss, i) => (
-                      <li key={i} className="flex items-start gap-1">
-                        <span className="text-red-400 shrink-0">•</span>
-                        <span>{iss}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
-          )}
-
-          {/* Data Cleaning Recommendations Card */}
-          {profile && profile.profile && (
-            <div className="glass-panel p-4 border border-slate-800/80 space-y-3">
-              <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Wand2 className="h-4 w-4 text-indigo-400" />
-                Data Cleaning Control
-              </h3>
-              
-              {profile.profile.recommendations && profile.profile.recommendations.length > 0 ? (
-                <>
-                  <p className="text-[9px] text-slate-400 leading-tight">
-                    Select recommended corrections to apply:
-                  </p>
-                  <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                    {profile.profile.recommendations.map((rec) => (
-                      <label 
-                        key={rec.id} 
-                        className="flex items-start gap-2 p-2 bg-[#0c1017] border border-slate-900 rounded hover:border-slate-800 transition-colors cursor-pointer"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={selectedCleaningActions.includes(rec.id)}
-                          onChange={() => {
-                            setSelectedCleaningActions((prev) =>
-                              prev.includes(rec.id)
-                                ? prev.filter((id) => id !== rec.id)
-                                : [...prev, rec.id]
-                            );
-                          }}
-                          className="mt-0.5 rounded text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-950 h-3.5 w-3.5"
-                        />
-                        <div className="text-[9px]">
-                          <span className="font-semibold text-slate-200">{rec.description}</span>
-                          <span className="block text-[8px] text-slate-500 mt-0.5">Impact: {rec.impact}</span>
-                        </div>
-                      </label>
-                    ))}
-                  </div>
-                  <button
-                    onClick={handleApplyCleaningFromSidebar}
-                    disabled={selectedCleaningActions.length === 0 || cleaningLoading}
-                    className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-bold py-1.5 rounded transition-colors text-[10px] flex items-center justify-center gap-1.5"
-                  >
-                    <Wand2 className="h-3.5 w-3.5" />
-                    {cleaningLoading ? "Cleaning..." : "Apply Selected Fixes"}
-                  </button>
-                </>
-              ) : (
-                <div className="text-[10px] text-slate-500 italic p-2.5 bg-slate-950/20 border border-slate-900 rounded">
-                  No issues found! Your dataset is clean and ready.
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Dataset Profile Card */}
-          {profile && profile.profile && (
-            <div className="glass-panel p-4 border border-slate-800/80 space-y-2.5">
-              <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Layers className="h-4 w-4 text-blue-400" />
-                Schema View
-              </h3>
-              
-              <div className="space-y-1.5 max-h-[160px] overflow-y-auto pr-1">
-                {profile.profile.columns.map((c) => (
-                  <div key={c.name} className="flex items-center justify-between border-b border-slate-900/60 py-1 text-[10px]">
-                    <span className="font-bold text-slate-300 truncate max-w-[120px]">{c.name}</span>
-                    <span className="text-slate-500 font-mono text-[9px]">{c.dtype}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Versions Rollback Card */}
-          {versions.length > 0 && (
-            <div className="glass-panel p-4 border border-slate-800/80 space-y-2.5">
-              <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-orange-400" />
-                Version Rollbacks
-              </h3>
-              
-              <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
-                {versions.map((v) => (
-                  <div key={v.id} className="p-2 bg-slate-950/40 border border-slate-900 rounded flex flex-col gap-1 text-[10px]">
-                    <div className="flex items-center justify-between font-semibold">
-                      <span className="text-blue-400">Version {v.version_num}</span>
-                      <span className="text-slate-500 text-[9px]">{v.created_at.split(" ")[0]}</span>
+          ) : (
+            <>
+              {/* Data Quality Score Card */}
+              {profile && profile.profile && (
+                <div className="glass-panel p-4 border border-brand-border space-y-3">
+                  <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted flex items-center gap-1.5">
+                    <Activity className="h-4 w-4 text-brand-lime" />
+                    Data Quality Score
+                  </h3>
+                  
+                  <div className="flex items-center gap-3.5">
+                    <div className="h-12 w-12 rounded-full border-2 border-brand-border flex items-center justify-center shrink-0 bg-brand-input">
+                      <span className={`text-xs font-extrabold ${getQualityColor(profile.profile.overall_score)}`}>
+                        {Math.round(profile.profile.overall_score)}
+                      </span>
                     </div>
-                    <p className="text-slate-400 text-[9px] leading-tight">{v.description}</p>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-semibold text-slate-200">
+                        Rating: {profile.profile.overall_score >= 80 ? "Premium" : profile.profile.overall_score >= 50 ? "Moderate" : "Poor"}
+                      </p>
+                      <p className="text-[9px] text-brand-muted leading-tight">
+                        Audited empty rows, duplicates, and numeric outliers.
+                      </p>
+                    </div>
+                  </div>
+
+                  {profile.profile.recommendations && profile.profile.recommendations.length > 0 ? (
                     <button
-                      onClick={() => handleRollback(v.version_num)}
-                      className="w-full bg-[#0f172a] border border-slate-800 hover:bg-slate-800 text-[9px] text-slate-300 font-bold py-1 rounded transition-colors"
+                      onClick={() => setShowCleaningModal(true)}
+                      className="w-full mt-2 bg-brand-lime hover:bg-brand-lime-hover text-black font-black uppercase py-1.5 rounded transition-colors text-[10px] flex items-center justify-center gap-1.5 cursor-pointer shadow-md hover:shadow-brand-lime/10"
                     >
-                      Rollback
+                      <Wand2 className="h-3.5 w-3.5 animate-pulse" />
+                      Clean Dataset ({profile.profile.recommendations.length} Fixes)
                     </button>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Reports History */}
-          {reports.length > 0 && (
-            <div className="glass-panel p-4 border border-slate-800/80 space-y-2.5">
-              <h3 className="text-[10px] font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                <FileSpreadsheet className="h-4 w-4 text-yellow-400" />
-                Reports Archive
-              </h3>
-              
-              <div className="space-y-1.5 max-h-[150px] overflow-y-auto pr-1">
-                {reports.map((rep) => (
-                  <div key={rep.id} className="flex items-center justify-between p-2 bg-[#0c1017] border border-slate-900 rounded text-[9px]">
-                    <div className="min-w-0 pr-1">
-                      <p className="font-bold text-slate-350 truncate">{rep.title}</p>
-                      <p className="text-[8px] text-slate-500">{rep.created_at}</p>
+                  ) : (
+                    <div className="text-[9px] text-brand-dimmed italic p-2 bg-brand-input/40 border border-brand-border rounded font-medium text-center">
+                      Dataset is clean and optimized!
                     </div>
-                    <a 
-                      href={`http://127.0.0.1:8000/${rep.file_path}`} 
-                      download 
-                      target="_blank"
-                      className="text-blue-400 hover:text-blue-300 transition-colors"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                    </a>
+                  )}
+
+                  {profile.profile.issues && profile.profile.issues.length > 0 && (
+                    <div className="space-y-1 pt-2 border-t border-brand-border/60">
+                      <p className="text-[9px] font-bold text-brand-muted">Issues Logged:</p>
+                      <ul className="text-[9px] text-brand-muted space-y-0.5 max-h-[120px] overflow-y-auto pr-1">
+                        {profile.profile.issues.map((iss, i) => (
+                          <li key={i} className="flex items-start gap-1">
+                            <span className="text-red-500 shrink-0">•</span>
+                            <span>{iss}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Dataset Summary Card */}
+              <div className="glass-panel p-4 border border-brand-border space-y-3">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted flex items-center gap-1.5">
+                  <Database className="h-4 w-4 text-brand-lime" />
+                  Dataset Summary
+                </h3>
+                
+                <div className="space-y-2 text-[11px]">
+                  <div className="flex justify-between border-b border-brand-border/40 pb-1.5">
+                    <span className="text-brand-muted">File Name</span>
+                    <span className="font-semibold text-slate-200 truncate max-w-[150px]" title={activeWorkspace.file_name || "Unknown"}>
+                      {activeWorkspace.file_name || "Unknown"}
+                    </span>
                   </div>
-                ))}
+                  <div className="flex justify-between border-b border-brand-border/40 pb-1.5">
+                    <span className="text-brand-muted">Total Rows</span>
+                    <span className="font-bold text-slate-100">
+                      {profile.profile.row_count ? profile.profile.row_count.toLocaleString() : "Unknown"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between border-b border-brand-border/40 pb-1.5">
+                    <span className="text-brand-muted">Total Columns</span>
+                    <span className="font-bold text-slate-100">
+                      {profile.profile.column_count || "Unknown"}
+                    </span>
+                  </div>
+                  
+                  {/* Columns Data Type Breakdown */}
+                  <div className="pt-1">
+                    <p className="text-[9px] font-bold text-brand-muted mb-1.5">Column Type Breakdown:</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="bg-brand-input/40 border border-brand-border/40 p-1.5 rounded flex flex-col items-center">
+                        <span className="text-brand-lime font-black text-xs">
+                          {profile.profile.columns.filter(c => c.dtype.includes('int') || c.dtype.includes('float')).length}
+                        </span>
+                        <span className="text-[8px] text-brand-muted uppercase font-bold tracking-wider mt-0.5">Numeric</span>
+                      </div>
+                      <div className="bg-brand-input/40 border border-brand-border/40 p-1.5 rounded flex flex-col items-center">
+                        <span className="text-blue-400 font-black text-xs">
+                          {profile.profile.columns.filter(c => !c.dtype.includes('int') && !c.dtype.includes('float')).length}
+                        </span>
+                        <span className="text-[8px] text-brand-muted uppercase font-bold tracking-wider mt-0.5">Categorical/Text</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
-            </div>
+
+              {/* Column Quick-Stats Card */}
+              <div className="glass-panel p-4 border border-brand-border space-y-3">
+                <h3 className="text-[10px] font-bold uppercase tracking-wider text-brand-muted flex items-center gap-1.5">
+                  <Layers className="h-4 w-4 text-brand-lime" />
+                  Column Quick-Stats
+                </h3>
+                
+                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-1">
+                  {profile.profile.columns.map((col, idx) => {
+                    const isNumeric = col.dtype.includes('int') || col.dtype.includes('float');
+                    
+                    return (
+                      <div key={idx} className="bg-brand-card/60 hover:bg-brand-card border border-brand-border/40 hover:border-brand-border p-2 rounded transition-colors space-y-1.5">
+                        <div className="flex justify-between items-center min-w-0">
+                          <span className="font-bold text-[10px] text-slate-200 truncate max-w-[120px]" title={col.name}>
+                            {col.name}
+                          </span>
+                          <span className="text-[8px] font-semibold px-1 py-0.5 bg-brand-input/80 border border-brand-border/60 rounded text-brand-muted uppercase">
+                            {col.dtype}
+                          </span>
+                        </div>
+                        
+                        {isNumeric ? (
+                          <div className="grid grid-cols-3 gap-1 text-[8px] text-brand-muted border-t border-brand-border/30 pt-1">
+                            <div>
+                              <span className="block font-semibold">Min</span>
+                              <span className="text-slate-300 font-medium">
+                                {col.min !== undefined && col.min !== null ? col.min.toFixed(2).replace(/\.00$/, '') : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="block font-semibold">Max</span>
+                              <span className="text-slate-300 font-medium">
+                                {col.max !== undefined && col.max !== null ? col.max.toFixed(2).replace(/\.00$/, '') : 'N/A'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="block font-semibold">Mean</span>
+                              <span className="text-slate-300 font-medium">
+                                {col.mean !== undefined && col.mean !== null ? col.mean.toFixed(2).replace(/\.00$/, '') : 'N/A'}
+                              </span>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex justify-between items-center text-[8px] text-brand-muted border-t border-brand-border/30 pt-1">
+                            <span>Unique Values:</span>
+                            <span className="text-slate-300 font-bold">{col.unique_count ?? 'N/A'}</span>
+                          </div>
+                        )}
+                        
+                        {col.null_count > 0 && (
+                          <div className="flex justify-between items-center text-[8px] text-red-400 bg-red-950/20 px-1 py-0.5 rounded border border-red-900/20">
+                            <span>Missing values:</span>
+                            <span className="font-bold">{col.null_count} ({Math.round(col.null_percent * 100)}%)</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
           )}
         </aside>
       )}
 
+
       {/* 4. Scheduled Report Modal */}
       {showScheduleModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-[#0f172a] border border-slate-800 w-full max-w-md rounded-xl shadow-2xl p-6 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-xl shadow-2xl p-6 relative">
             <button
               onClick={() => setShowScheduleModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+              className="absolute top-4 right-4 text-brand-muted hover:text-white cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
 
             <h3 className="text-sm font-bold text-slate-100 mb-4 flex items-center gap-2">
-              <Clock className="h-5 w-5 text-blue-500" />
+              <Clock className="h-5 w-5 text-brand-lime animate-pulse" />
               Schedule Auto-Reports
             </h3>
 
             <div className="space-y-4">
               <div className="flex flex-col gap-1.5">
-                <label className="font-semibold text-slate-300">Name</label>
+                <label className="font-semibold text-brand-muted">Name</label>
                 <input
                   type="text"
                   placeholder="e.g. Sales summary Mon 9AM"
                   value={schName}
                   onChange={(e) => setSchName(e.target.value)}
-                  className="bg-[#0b0f19] border border-slate-800 text-xs rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500"
+                  className="bg-brand-input border border-brand-border text-xs rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-lime"
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="font-semibold text-slate-300">SQL Report Query</label>
+                <label className="font-semibold text-brand-muted">SQL Report Query</label>
                 <textarea
                   rows="3"
                   placeholder="SELECT * FROM current_table ORDER BY sales DESC LIMIT 10"
                   value={schQuery}
                   onChange={(e) => setSchQuery(e.target.value)}
-                  className="bg-[#0b0f19] border border-slate-800 text-xs rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500 font-mono resize-none"
+                  className="bg-brand-input border border-brand-border text-xs rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-lime font-mono resize-none"
                 />
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="font-semibold text-slate-300">Frequency</label>
+                <label className="font-semibold text-brand-muted">Frequency</label>
                 <select
                   value={schFreq}
                   onChange={(e) => setSchFreq(e.target.value)}
-                  className="bg-[#0b0f19] border border-slate-800 text-xs rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none"
+                  className="bg-brand-input border border-brand-border text-xs rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-lime cursor-pointer"
                 >
                   <option value="daily">Daily Report (Interval)</option>
                   <option value="weekly">Weekly (Mon 9AM)</option>
@@ -810,13 +1144,13 @@ function App() {
 
               {schFreq === "cron" && (
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-semibold text-slate-300">Cron Rule</label>
+                  <label className="font-semibold text-brand-muted">Cron Rule</label>
                   <input
                     type="text"
                     placeholder="e.g. */5 * * * * (every 5 mins)"
                     value={schCron}
                     onChange={(e) => setSchCron(e.target.value)}
-                    className="bg-[#0b0f19] border border-slate-800 text-xs rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500 font-mono"
+                    className="bg-brand-input border border-brand-border text-xs rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-lime font-mono"
                   />
                 </div>
               )}
@@ -824,7 +1158,7 @@ function App() {
               <button
                 onClick={handleCreateSchedule}
                 disabled={!schName || !schQuery}
-                className="w-full bg-blue-600 hover:bg-blue-500 disabled:bg-slate-800 disabled:text-slate-500 text-white font-medium py-2 rounded-lg transition-colors text-xs"
+                className="w-full bg-brand-lime hover:bg-brand-lime-hover disabled:bg-brand-border disabled:text-brand-dimmed text-black font-semibold py-2 rounded-lg transition-colors text-xs cursor-pointer"
               >
                 Schedule Job
               </button>
@@ -835,11 +1169,11 @@ function App() {
 
       {/* 5. Rename Workspace Modal */}
       {wsToRename && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-[#0f172a] border border-slate-800 w-full max-w-sm rounded-xl shadow-2xl p-6 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+          <div className="bg-brand-card border border-brand-border w-full max-w-sm rounded-xl shadow-2xl p-6 relative">
             <button
               onClick={() => setWsToRename(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+              className="absolute top-4 right-4 text-brand-muted hover:text-white cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
@@ -850,12 +1184,12 @@ function App() {
 
             <div className="space-y-4">
               <div className="flex flex-col gap-1.5">
-                <label className="font-semibold text-slate-300">New Display Name</label>
+                <label className="font-semibold text-brand-muted">New Display Name</label>
                 <input
                   type="text"
                   value={renameVal}
                   onChange={(e) => setRenameVal(e.target.value)}
-                  className="bg-[#0b0f19] border border-slate-800 text-xs rounded-lg px-3 py-1.5 text-slate-200 focus:outline-none focus:border-blue-500"
+                  className="bg-brand-input border border-brand-border text-xs rounded-lg px-3 py-2 text-slate-200 focus:outline-none focus:border-brand-lime"
                 />
               </div>
 
@@ -863,13 +1197,13 @@ function App() {
                 <button
                   onClick={handleRenameWorkspace}
                   disabled={!renameVal.trim()}
-                  className="flex-1 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-2 rounded-lg transition-colors"
+                  className="flex-1 bg-brand-lime hover:bg-brand-lime-hover disabled:bg-brand-border disabled:text-brand-dimmed text-black text-xs font-semibold py-2 rounded-lg transition-colors cursor-pointer"
                 >
                   Rename
                 </button>
                 <button
                   onClick={() => setWsToRename(null)}
-                  className="flex-1 bg-slate-850 hover:bg-slate-800 text-slate-300 text-xs font-semibold py-2 rounded-lg transition-colors"
+                  className="flex-1 bg-brand-card hover:bg-brand-card-hover border border-brand-border text-brand-muted text-xs font-semibold py-2 rounded-lg transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
@@ -881,11 +1215,11 @@ function App() {
 
       {/* 6. Workspace Deletion Modal */}
       {wsToDelete && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-[#0f172a] border border-slate-800 w-full max-w-md rounded-xl shadow-2xl p-6 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+          <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-xl shadow-2xl p-6 relative">
             <button
               onClick={() => setWsToDelete(null)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+              className="absolute top-4 right-4 text-brand-muted hover:text-white cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
@@ -903,7 +1237,7 @@ function App() {
               <strong>Associated dataset:</strong> {wsToDelete.file_name}
               <br />
               <strong>Files to be deleted:</strong>
-              <ul className="list-disc list-inside mt-1.5 space-y-1 font-mono text-[10px] text-slate-400 bg-slate-950/40 p-2 rounded border border-slate-900">
+              <ul className="list-disc list-inside mt-1.5 space-y-1 font-mono text-[10px] text-brand-muted bg-brand-input p-2.5 rounded border border-brand-border">
                 <li>Original data: uploads/raw/{wsToDelete.file_name}</li>
                 <li>All data versions: cleaned_{wsToDelete.name}_v*.csv</li>
                 <li>RAG Embeddings index: ws_{wsToDelete.id}.index</li>
@@ -914,13 +1248,13 @@ function App() {
             <div className="flex gap-3">
               <button
                 onClick={handleConfirmDeleteWorkspace}
-                className="flex-1 bg-red-650 hover:bg-red-550 text-white font-medium py-2 rounded-lg transition-colors text-xs"
+                className="flex-1 bg-red-650 hover:bg-red-550 text-white font-medium py-2 rounded-lg transition-colors text-xs cursor-pointer"
               >
                 Permanently Delete
               </button>
               <button
                 onClick={() => setWsToDelete(null)}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-2 rounded-lg transition-colors text-xs"
+                className="flex-1 bg-brand-card hover:bg-brand-card-hover border border-brand-border text-brand-muted font-medium py-2 rounded-lg transition-colors text-xs cursor-pointer"
               >
                 Cancel
               </button>
@@ -931,17 +1265,17 @@ function App() {
 
       {/* 7. Major Data Cleaning Confirmation Modal */}
       {showCleaningConfirmModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-[#0f172a] border border-slate-800 w-full max-w-md rounded-xl shadow-2xl p-6 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+          <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-xl shadow-2xl p-6 relative">
             <button
               onClick={() => setShowCleaningConfirmModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+              className="absolute top-4 right-4 text-brand-muted hover:text-white cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
 
             <div className="flex items-center gap-2 mb-4">
-              <AlertTriangle className="h-6 w-6 text-yellow-500 animate-pulse" />
+              <AlertTriangle className="h-6 w-6 text-brand-lime animate-pulse" />
               <h3 className="text-sm font-bold text-slate-100">
                 Confirm Major Operations
               </h3>
@@ -956,13 +1290,13 @@ function App() {
             <div className="flex gap-3">
               <button
                 onClick={executeCleaning}
-                className="flex-1 bg-[#4f46e5] hover:bg-[#4338ca] text-white font-medium py-2 rounded-lg transition-colors text-xs"
+                className="flex-1 bg-brand-lime hover:bg-brand-lime-hover text-black font-semibold py-2 rounded-lg transition-colors text-xs cursor-pointer"
               >
                 Confirm & Clean
               </button>
               <button
                 onClick={() => setShowCleaningConfirmModal(false)}
-                className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-medium py-2 rounded-lg transition-colors text-xs"
+                className="flex-1 bg-brand-card hover:bg-brand-card-hover border border-brand-border text-brand-muted font-medium py-2 rounded-lg transition-colors text-xs cursor-pointer"
               >
                 Cancel
               </button>
@@ -973,21 +1307,21 @@ function App() {
 
       {/* 8. Search Workspaces Modal (Ctrl+K) */}
       {showSearchModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-[#0f172a] border border-slate-800 w-full max-w-lg rounded-xl shadow-2xl p-6 relative overflow-hidden flex flex-col max-h-[420px]">
-            <div className="p-4 border-b border-slate-850 flex items-center gap-2 shrink-0">
-              <Search className="h-4 w-4 text-slate-500" />
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+          <div className="bg-brand-card border border-brand-border w-full max-w-lg rounded-xl shadow-2xl p-6 relative overflow-hidden flex flex-col max-h-[420px]">
+            <div className="p-4 border-b border-brand-border flex items-center gap-2 shrink-0">
+              <Search className="h-4 w-4 text-brand-lime" />
               <input
                 type="text"
                 placeholder="Search workspaces by name or source dataset..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="flex-1 bg-transparent text-xs text-slate-200 placeholder-slate-500 focus:outline-none"
+                className="flex-1 bg-transparent text-xs text-slate-200 placeholder-brand-dimmed focus:outline-none"
                 autoFocus
               />
               <button
                 onClick={() => { setShowSearchModal(false); setSearchQuery(""); }}
-                className="text-slate-500 hover:text-white"
+                className="text-brand-muted hover:text-white cursor-pointer"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -995,7 +1329,7 @@ function App() {
 
             <div className="flex-1 overflow-y-auto p-3 space-y-1.5">
               {filteredWorkspaces.length === 0 ? (
-                <p className="text-xs text-slate-550 italic p-3 text-center">No workspaces match your query.</p>
+                <p className="text-xs text-brand-dimmed italic p-3 text-center">No workspaces match your query.</p>
               ) : (
                 filteredWorkspaces.map(w => {
                   const isAct = w.id === activeWorkspaceId;
@@ -1005,12 +1339,12 @@ function App() {
                       onClick={() => { handleWorkspaceActivated(w); setShowSearchModal(false); setSearchQuery(""); }}
                       className={`p-2.5 rounded-lg border cursor-pointer transition-all ${
                         isAct 
-                          ? "bg-blue-600/10 border-blue-500/30 text-blue-400" 
-                          : "bg-slate-900/40 border-slate-850 hover:bg-slate-850/60 text-slate-300 hover:text-white"
+                          ? "bg-brand-lime/10 border-brand-lime text-brand-lime" 
+                          : "bg-brand-input border-brand-border hover:bg-brand-card-hover text-brand-muted hover:text-slate-200"
                       }`}
                     >
                       <p className="font-bold text-[11px] uppercase">{w.name}</p>
-                      <p className="text-[9px] text-slate-500 mt-0.5">Dataset: {w.file_name} • Ingested: {w.created_at || "N/A"}</p>
+                      <p className="text-[9px] text-brand-dimmed mt-0.5">Dataset: {w.file_name} • Ingested: {w.created_at || "N/A"}</p>
                     </div>
                   );
                 })
@@ -1022,71 +1356,71 @@ function App() {
 
       {/* 9. Export Report Wizard Modal */}
       {showExportModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4">
-          <div className="bg-[#0f172a] border border-slate-800 w-full max-w-md rounded-xl shadow-2xl p-6 relative">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4">
+          <div className="bg-brand-card border border-brand-border w-full max-w-md rounded-xl shadow-2xl p-6 relative">
             <button
               onClick={() => setShowExportModal(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-white"
+              className="absolute top-4 right-4 text-brand-muted hover:text-white cursor-pointer"
             >
               <X className="h-5 w-5" />
             </button>
 
             <h3 className="text-xs font-bold text-slate-100 mb-4 flex items-center gap-2 uppercase tracking-wider">
-              <Download className="h-4 w-4 text-blue-500" />
+              <Download className="h-4 w-4 text-brand-lime" />
               Export Report Wizard
             </h3>
 
             {exportStep === 1 ? (
               <div className="space-y-4">
                 <div className="space-y-2">
-                  <label className="font-semibold text-slate-350 block mb-1">Include Sections:</label>
+                  <label className="font-semibold text-brand-muted block mb-1">Include Sections:</label>
                   <div className="grid grid-cols-2 gap-2">
-                    <label className="flex items-center gap-2 p-2 bg-[#0c1017] border border-slate-900 rounded hover:border-slate-800 transition-colors cursor-pointer text-[10px] text-slate-300">
+                    <label className="flex items-center gap-2 p-2 bg-brand-input border border-brand-border rounded hover:border-brand-muted/30 transition-colors cursor-pointer text-[10px] text-slate-350">
                       <input
                         type="checkbox"
                         checked={exportConfig.include_dataset_summary}
                         onChange={(e) => setExportConfig({ ...exportConfig, include_dataset_summary: e.target.checked })}
-                        className="rounded text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-950 h-3.5 w-3.5"
+                        className="rounded text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-bg h-3.5 w-3.5"
                       />
                       Dataset Summary
                     </label>
 
-                    <label className="flex items-center gap-2 p-2 bg-[#0c1017] border border-slate-900 rounded hover:border-slate-800 transition-colors cursor-pointer text-[10px] text-slate-300">
+                    <label className="flex items-center gap-2 p-2 bg-brand-input border border-brand-border rounded hover:border-brand-muted/30 transition-colors cursor-pointer text-[10px] text-slate-350">
                       <input
                         type="checkbox"
                         checked={exportConfig.include_insights}
                         onChange={(e) => setExportConfig({ ...exportConfig, include_insights: e.target.checked })}
-                        className="rounded text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-950 h-3.5 w-3.5"
+                        className="rounded text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-bg h-3.5 w-3.5"
                       />
                       AI Insights
                     </label>
 
-                    <label className="flex items-center gap-2 p-2 bg-[#0c1017] border border-slate-900 rounded hover:border-slate-800 transition-colors cursor-pointer text-[10px] text-slate-300">
+                    <label className="flex items-center gap-2 p-2 bg-brand-input border border-brand-border rounded hover:border-brand-muted/30 transition-colors cursor-pointer text-[10px] text-slate-355">
                       <input
                         type="checkbox"
                         checked={exportConfig.include_sql}
                         onChange={(e) => setExportConfig({ ...exportConfig, include_sql: e.target.checked })}
-                        className="rounded text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-950 h-3.5 w-3.5"
+                        className="rounded text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-bg h-3.5 w-3.5"
                       />
                       Generated SQL
                     </label>
 
-                    <label className="flex items-center gap-2 p-2 bg-[#0c1017] border border-slate-900 rounded hover:border-slate-800 transition-colors cursor-pointer text-[10px] text-slate-300">
+                    <label className="flex items-center gap-2 p-2 bg-brand-input border border-brand-border rounded hover:border-brand-muted/30 transition-colors cursor-pointer text-[10px] text-slate-350">
                       <input
                         type="checkbox"
                         checked={exportConfig.include_tables}
                         onChange={(e) => setExportConfig({ ...exportConfig, include_tables: e.target.checked })}
-                        className="rounded text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-950 h-3.5 w-3.5"
+                        className="rounded text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-bg h-3.5 w-3.5"
                       />
                       Result Tables
                     </label>
 
-                    <label className="flex items-center gap-2 p-2 bg-[#0c1017] border border-slate-900 rounded hover:border-slate-800 transition-colors cursor-pointer text-[10px] text-slate-300">
+                    <label className="flex items-center gap-2 p-2 bg-brand-input border border-brand-border rounded hover:border-brand-muted/30 transition-colors cursor-pointer text-[10px] text-slate-350">
                       <input
                         type="checkbox"
                         checked={exportConfig.include_charts}
                         onChange={(e) => setExportConfig({ ...exportConfig, include_charts: e.target.checked })}
-                        className="rounded text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-950 h-3.5 w-3.5"
+                        className="rounded text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-bg h-3.5 w-3.5"
                       />
                       Plotly Charts
                     </label>
@@ -1094,25 +1428,25 @@ function App() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="font-semibold text-slate-350 block mb-1">Export Scope:</label>
+                  <label className="font-semibold text-brand-muted block mb-1">Export Scope:</label>
                   <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
+                    <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-350">
                       <input
                         type="radio"
                         name="scope"
                         checked={exportConfig.scope === "current"}
                         onChange={() => setExportConfig({ ...exportConfig, scope: "current" })}
-                        className="text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-950 h-3.5 w-3.5"
+                        className="text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-bg h-3.5 w-3.5"
                       />
                       Current Query
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
+                    <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-350">
                       <input
                         type="radio"
                         name="scope"
                         checked={exportConfig.scope === "session"}
                         onChange={() => setExportConfig({ ...exportConfig, scope: "session" })}
-                        className="text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-950 h-3.5 w-3.5"
+                        className="text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-bg h-3.5 w-3.5"
                       />
                       Entire Chat Session
                     </label>
@@ -1120,35 +1454,35 @@ function App() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="font-semibold text-slate-350 block mb-1">Format:</label>
+                  <label className="font-semibold text-brand-muted block mb-1">Format:</label>
                   <div className="flex gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
+                    <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-350">
                       <input
                         type="radio"
                         name="format"
                         checked={exportConfig.format === "pdf"}
                         onChange={() => setExportConfig({ ...exportConfig, format: "pdf" })}
-                        className="text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-950 h-3.5 w-3.5"
+                        className="text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-bg h-3.5 w-3.5"
                       />
                       PDF
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
+                    <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-350">
                       <input
                         type="radio"
                         name="format"
                         checked={exportConfig.format === "pptx"}
                         onChange={() => setExportConfig({ ...exportConfig, format: "pptx" })}
-                        className="text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-950 h-3.5 w-3.5"
+                        className="text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-bg h-3.5 w-3.5"
                       />
                       PPTX
                     </label>
-                    <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
+                    <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-350">
                       <input
                         type="radio"
                         name="format"
                         checked={exportConfig.format === "excel"}
                         onChange={() => setExportConfig({ ...exportConfig, format: "excel" })}
-                        className="text-blue-600 focus:ring-blue-500 border-slate-700 bg-slate-950 h-3.5 w-3.5"
+                        className="text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-bg h-3.5 w-3.5"
                       />
                       Excel
                     </label>
@@ -1158,13 +1492,13 @@ function App() {
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={() => setExportStep(2)}
-                    className="flex-1 bg-blue-600 hover:bg-blue-500 text-white font-semibold py-2 rounded-lg transition-colors text-xs cursor-pointer text-center"
+                    className="flex-1 bg-brand-lime hover:bg-brand-lime-hover text-black font-semibold py-2 rounded-lg transition-colors text-xs cursor-pointer text-center"
                   >
                     Next: Preview
                   </button>
                   <button
                     onClick={() => setShowExportModal(false)}
-                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold py-2 rounded-lg transition-colors text-xs cursor-pointer text-center"
+                    className="flex-1 bg-brand-card hover:bg-brand-card-hover border border-brand-border text-brand-muted font-semibold py-2 rounded-lg transition-colors text-xs cursor-pointer text-center"
                   >
                     Cancel
                   </button>
@@ -1172,11 +1506,11 @@ function App() {
               </div>
             ) : (
               <div className="space-y-4">
-                <div className="p-4 bg-slate-950/60 border border-slate-850 rounded-lg space-y-3">
-                  <h4 className="text-[10px] font-bold text-slate-300 border-b border-slate-850 pb-1.5 uppercase tracking-wider">
+                <div className="p-4 bg-brand-input border border-brand-border rounded-lg space-y-3">
+                  <h4 className="text-[10px] font-bold text-slate-300 border-b border-brand-border pb-1.5 uppercase tracking-wider">
                     Report Preview Summary
                   </h4>
-                  <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-[10px] text-slate-400">
+                  <div className="grid grid-cols-2 gap-y-2 gap-x-4 text-[10px] text-brand-muted">
                     <div>Scope:</div>
                     <div className="font-bold text-slate-200 uppercase">{exportConfig.scope}</div>
                     
@@ -1197,7 +1531,7 @@ function App() {
                     </div>
                   </div>
                   
-                  <div className="text-[9px] text-slate-550 pt-2 border-t border-slate-850 leading-tight">
+                  <div className="text-[9px] text-brand-dimmed pt-2 border-t border-brand-border leading-tight">
                     <span className="font-semibold block mb-0.5">Sections to export:</span>
                     {Object.keys(exportConfig)
                       .filter(k => k.startsWith("include_") && exportConfig[k])
@@ -1209,19 +1543,182 @@ function App() {
                 <div className="flex gap-3 pt-2">
                   <button
                     onClick={handleWizardExport}
-                    className="flex-1 bg-emerald-600 hover:bg-emerald-500 text-white font-semibold py-2 rounded-lg transition-colors text-xs cursor-pointer text-center"
+                    className="flex-1 bg-brand-lime hover:bg-brand-lime-hover text-black font-semibold py-2 rounded-lg transition-colors text-xs cursor-pointer text-center"
                   >
                     Confirm & Export
                   </button>
                   <button
                     onClick={() => setExportStep(1)}
-                    className="flex-1 bg-slate-800 hover:bg-slate-700 text-slate-350 font-semibold py-2 rounded-lg transition-colors text-xs cursor-pointer text-center"
+                    className="flex-1 bg-brand-card hover:bg-brand-card-hover border border-brand-border text-brand-muted font-semibold py-2 rounded-lg transition-colors text-xs cursor-pointer text-center"
                   >
                     Back
                   </button>
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 10. Data Cleaning Control Modal */}
+      {showCleaningModal && profile && profile.profile && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-brand-card border border-brand-border w-full max-w-lg rounded-xl shadow-2xl p-6 relative flex flex-col max-h-[90vh]">
+            <button
+              onClick={() => setShowCleaningModal(false)}
+              className="absolute top-4 right-4 text-brand-muted hover:text-white cursor-pointer transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <h3 className="text-sm font-bold text-slate-100 mb-2 flex items-center gap-2 border-b border-brand-border pb-3 shrink-0">
+              <Wand2 className="h-5 w-5 text-brand-lime animate-pulse" />
+              Data Cleaning Control Panel
+            </h3>
+
+            {profile.profile.recommendations && profile.profile.recommendations.length > 0 ? (
+              <div className="flex flex-col flex-1 min-h-0">
+                <div className="flex justify-between items-center mb-3">
+                  <p className="text-[10px] text-brand-muted leading-tight font-medium">
+                    Select recommended corrections to apply:
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        setSelectedCleaningActions(profile.profile.recommendations.map(r => r.id));
+                      }}
+                      className="text-[9px] font-bold text-brand-lime hover:underline cursor-pointer"
+                    >
+                      Select All
+                    </button>
+                    <span className="text-brand-border text-[9px]">|</span>
+                    <button
+                      onClick={() => setSelectedCleaningActions([])}
+                      className="text-[9px] font-bold text-brand-muted hover:underline cursor-pointer"
+                    >
+                      Clear All
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-2.5 overflow-y-auto pr-1 flex-1 mb-4">
+                  {profile.profile.recommendations.map((rec) => (
+                    <label 
+                      key={rec.id} 
+                      className="flex items-start gap-3 p-3 bg-brand-input border border-brand-border rounded-lg hover:border-brand-muted/20 transition-all cursor-pointer group"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedCleaningActions.includes(rec.id)}
+                        onChange={() => {
+                          setSelectedCleaningActions((prev) =>
+                            prev.includes(rec.id)
+                              ? prev.filter((id) => id !== rec.id)
+                              : [...prev, rec.id]
+                          );
+                        }}
+                        className="mt-0.5 rounded text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-bg h-4 w-4 accent-brand-lime cursor-pointer shrink-0"
+                      />
+                      <div className="text-[11px] min-w-0">
+                        <span className="font-semibold text-slate-200 group-hover:text-white transition-colors">{rec.description}</span>
+                        <div className="grid grid-cols-2 gap-2 mt-1.5 text-[9px] text-brand-dimmed">
+                          <span><strong>Impact:</strong> {rec.impact}</span>
+                          <span><strong>Affected Rows:</strong> {rec.affected_rows}</span>
+                        </div>
+                        {rec.reasoning && (
+                          <p className="text-[9px] text-brand-dimmed mt-1 italic"><strong>Reasoning:</strong> {rec.reasoning}</p>
+                        )}
+                      </div>
+                    </label>
+                  ))}
+                </div>
+
+                <button
+                  onClick={handleApplyCleaningFromSidebar}
+                  disabled={selectedCleaningActions.length === 0 || cleaningLoading}
+                  className="w-full bg-brand-lime hover:bg-brand-lime-hover disabled:bg-brand-border disabled:text-brand-dimmed text-black font-black uppercase py-2 rounded-lg transition-colors text-xs flex items-center justify-center gap-1.5 cursor-pointer disabled:cursor-not-allowed shrink-0 shadow-lg hover:shadow-brand-lime/10"
+                >
+                  <Wand2 className="h-4 w-4" />
+                  {cleaningLoading ? "Cleaning Data..." : `Apply ${selectedCleaningActions.length} Selected Fixes`}
+                </button>
+              </div>
+            ) : (
+              <div className="text-xs text-brand-dimmed italic p-5 bg-brand-input/40 border border-brand-border rounded-lg font-medium text-center">
+                No issues found! Your dataset is clean and ready.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 11. Upload Data Cleaning Recommendations Confirmation Modal */}
+      {uploadRecommendations && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-md p-4">
+          <div className="bg-[#17171A] border border-brand-border w-full max-w-lg rounded-xl shadow-2xl p-6 relative flex flex-col max-h-[90vh]">
+            <button
+              onClick={handleRejectUploadCleaning}
+              className="absolute top-4 right-4 text-brand-muted hover:text-white cursor-pointer transition-colors"
+            >
+              <X className="h-5 w-5" />
+            </button>
+
+            <div className="flex items-center gap-2.5 mb-4 shrink-0">
+              <ShieldAlert className="h-6 w-6 text-brand-lime" />
+              <h3 className="text-sm font-black text-white uppercase tracking-wider">
+                Action Required: Clean Dataset
+              </h3>
+            </div>
+
+            <p className="text-xs text-brand-muted mb-4 font-medium shrink-0">
+              We detected major data quality issues. Choose which corrections to apply:
+            </p>
+
+            <div className="overflow-y-auto space-y-2 mb-6 pr-2 flex-1 min-h-0">
+              {uploadRecommendations.map((rec) => (
+                <label
+                  key={rec.id}
+                  className="flex items-start gap-3 p-3 bg-brand-input border border-brand-border rounded-lg hover:border-brand-muted/30 cursor-pointer transition-colors"
+                >
+                  <input
+                    type="checkbox"
+                    checked={uploadSelectedActions.includes(rec.id)}
+                    onChange={() => {
+                      setUploadSelectedActions((prev) =>
+                        prev.includes(rec.id)
+                          ? prev.filter((id) => id !== rec.id)
+                          : [...prev, rec.id]
+                      );
+                    }}
+                    className="mt-0.5 rounded text-brand-lime focus:ring-brand-lime border-brand-border bg-brand-card h-4 w-4 accent-brand-lime"
+                  />
+                  <div>
+                    <div className="text-xs font-black text-white">
+                      {rec.description}
+                    </div>
+                    <div className="text-[10px] text-brand-dimmed mt-0.5 font-medium">
+                      Impact: {rec.impact}
+                    </div>
+                  </div>
+                </label>
+              ))}
+            </div>
+
+            <div className="flex gap-3 shrink-0">
+              <button
+                onClick={handleApplyUploadCleaning}
+                disabled={uploadLoading}
+                className="flex-1 bg-brand-lime hover:bg-brand-lime-hover text-black font-bold py-2 rounded-lg transition-colors text-xs cursor-pointer"
+              >
+                {uploadLoading ? "Applying..." : "Apply Selected Fixes"}
+              </button>
+              <button
+                onClick={handleRejectUploadCleaning}
+                disabled={uploadLoading}
+                className="flex-1 bg-[#1F1F24] border border-brand-border hover:bg-[#2A2A2F] text-brand-muted font-bold py-2 rounded-lg transition-colors text-xs cursor-pointer"
+              >
+                Skip Major Fixes
+              </button>
+            </div>
           </div>
         </div>
       )}

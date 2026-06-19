@@ -38,6 +38,7 @@ Rules:
 2. Human readable
 3. No markdown
 4. No bullet points
+5. Exclude any rows containing '⚠️ Unassigned' from KPI totals, averages, percentages, performance benchmarks, and rankings. Only include them in grand total row counts.
 
 Answer:
 """

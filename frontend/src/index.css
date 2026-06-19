@@ -1,32 +1,61 @@
 @import "tailwindcss";
 
+@theme {
+  --color-brand-bg: #0A0A0B;
+  --color-brand-sidebar: #111113;
+  --color-brand-card: #17171A;
+  --color-brand-card-hover: #1F1F24;
+  --color-brand-border: #2A2A2F;
+  --color-brand-lime: #B8FF2C;
+  --color-brand-lime-hover: #C7FF3D;
+  --color-brand-muted: #A1A1AA;
+  --color-brand-dimmed: #71717A;
+  --color-brand-input: #121214;
+
+  --color-background: #0A0A0B;
+  --color-sidebar: #111113;
+  --color-card: #17171A;
+  --color-card-hover: #1F1F24;
+  --color-card-border: #2A2A2F;
+  --color-primary-text: #FFFFFF;
+  --color-secondary-text: #A1A1AA;
+  --color-muted-text: #71717A;
+  --color-accent-green: #B8FF2C;
+  --color-accent-hover: #C7FF3D;
+  --color-success: #84CC16;
+  --color-warning: #FACC15;
+  --color-error: #EF4444;
+  --color-input-bg: #121214;
+}
+
 :root {
   color-scheme: dark;
-  --bg-color: #0b0f19;
-  --text-color: #f8fafc;
-  --panel-bg: rgba(15, 23, 42, 0.55);
-  --border-color: rgba(255, 255, 255, 0.08);
-  --shadow-color: rgba(0, 0, 0, 0.37);
-  --sidebar-bg: #0c1017;
-  --input-bg: #0b0f19;
-  --text-muted: #94a3b8;
-  --bg-gradient: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
-                 radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.15) 0px, transparent 50%),
-                 radial-gradient(at 50% 50%, rgba(16, 185, 129, 0.05) 0px, transparent 50%);
+  --bg-color: #0A0A0B;
+  --text-color: #FFFFFF;
+  --panel-bg: #17171A;
+  --border-color: #2A2A2F;
+  --shadow-color: rgba(0, 0, 0, 0.6);
+  --sidebar-bg: #111113;
+  --input-bg: #121214;
+  --text-muted: #A1A1AA;
+  --accent: #B8FF2C;
+  --bg-gradient: radial-gradient(at 0% 0%, rgba(184, 255, 44, 0.04) 0px, transparent 50%),
+    radial-gradient(at 100% 100%, rgba(17, 17, 19, 0.95) 0px, transparent 50%),
+    radial-gradient(at 50% 50%, rgba(184, 255, 44, 0.01) 0px, transparent 50%);
 }
 
 .light {
-  color-scheme: light;
-  --bg-color: #f8fafc;
-  --text-color: #0f172a;
-  --panel-bg: rgba(255, 255, 255, 0.85);
-  --border-color: rgba(15, 23, 42, 0.1);
-  --shadow-color: rgba(0, 0, 0, 0.05);
-  --sidebar-bg: #f1f5f9;
-  --input-bg: #ffffff;
-  --text-muted: #475569;
-  --bg-gradient: radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.05) 0px, transparent 50%),
-                 radial-gradient(at 100% 100%, rgba(139, 92, 246, 0.05) 0px, transparent 50%);
+  /* Prevent bright flash, keep dark-dominant dashboard styles as requested */
+  color-scheme: dark;
+  --bg-color: #0A0A0B;
+  --text-color: #FFFFFF;
+  --panel-bg: #17171A;
+  --border-color: #2A2A2F;
+  --shadow-color: rgba(0, 0, 0, 0.6);
+  --sidebar-bg: #111113;
+  --input-bg: #121214;
+  --text-muted: #A1A1AA;
+  --accent: #B8FF2C;
 }
 
 body {
@@ -46,44 +75,45 @@ body {
   border: 1px solid var(--border-color);
   box-shadow: 0 8px 32px 0 var(--shadow-color);
   border-radius: 0.75rem;
-  transition: background 0.3s ease, border-color 0.3s ease;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 .glass-panel-glow {
   background: var(--panel-bg);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(59, 130, 246, 0.25);
-  box-shadow: 0 8px 32px 0 rgba(59, 130, 246, 0.15);
+  border: 1px solid rgba(184, 255, 44, 0.35);
+  box-shadow: 0 0 25px rgba(184, 255, 44, 0.15);
   border-radius: 0.75rem;
 }
 
 .text-gradient {
-  background: linear-gradient(135deg, #60a5fa 0%, #a78bfa 100%);
+  background: linear-gradient(135deg, #FFFFFF 0%, #B8FF2C 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .text-gradient-emerald {
-  background: linear-gradient(135deg, #34d399 0%, #60a5fa 100%);
+  background: linear-gradient(135deg, #B8FF2C 0%, #84CC16 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
+/* Custom Scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 
 ::-webkit-scrollbar-track {
-  background: rgba(15, 23, 42, 0.1);
+  background: rgba(10, 10, 11, 0.5);
 }
 
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.25);
+  background: rgba(184, 255, 44, 0.15);
   border-radius: 3px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(148, 163, 184, 0.45);
+  background: rgba(184, 255, 44, 0.35);
 }

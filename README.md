@@ -1,151 +1,270 @@
 # AI-Data-Analytics-Agent 📊🤖
 
-An enterprise-grade, premium intelligent business intelligence and data analytics platform. It automatically processes datasets (CSV, Excel, TSV, Parquet) and documents (PDF, DOCX, TXT) to audit quality, recommend/apply cleaning actions, generate SQL queries via LLM code generation, execute them using a high-performance **DuckDB** engine, build automatic **Plotly** interactive charts, and compile professional summaries, PDF reports, or PowerPoint decks.
+An enterprise-grade, premium intelligent business intelligence (BI) and automated data analytics platform. It dynamically ingests tabular datasets (CSV, Excel, TSV, Parquet) and text-heavy documents (PDF, DOCX, TXT), performs automated data quality audits, provides an interactive control panel for versioned cleaning steps, generates and runs high-performance SQL queries via a **DuckDB** engine, renders automatic interactive **Plotly** visualizations, handles semantic Q&A using retrieval-augmented generation (**RAG**), schedules recurring report compilation in the background, and bundles analytical insights into executive-ready PDF, PowerPoint, or Excel reports.
 
 ---
 
-## Key Features 🚀
+## 🛠️ Architecture & Technology Stack
 
-### 1. 🔍 Proactive Data Quality & Cleaning
-- **Automatic Diagnostics**: Audits your data for duplicates, nulls, outliers, and schema types instantly upon loading.
-- **Data Cleaning Control Panel**: Displays specific cleaning suggestions (e.g., impute missing values, drop null columns, prune outliers based on IQR, remove duplicates) that can be applied in one click.
-- **Version Rollbacks**: Saves a full historic trail of cleaning runs and allows users to rollback the dataset version at any time.
+The platform features a decoupled client-server architecture built on modern web and data science frameworks:
 
-### 2. 💬 ChatGPT-style Conversational Memory & Persistence
-- **Persistent Chat History**: Works exactly like ChatGPT; keeps all previous questions, answers, and visual blocks visible in a scrollable history thread.
-- **Workspace-Specific Memory**: Maintains isolated chat histories per workspace, loading the correct history automatically upon workspace activation.
-- **Database Persistence**: Stores chat history permanently in SQLite (`chat_messages` table) so that it survives page refreshes and application restarts.
-- **Chat UX & Markdown**: Supports smooth scrolling to the latest message, message timestamps, a typing indicator, and custom markdown rendering (including headers, lists, and SQL code block formatting with a copy button).
-- **In-Line Interactive Elements**: Renders SQL viewers, result tables, and Plotly charts directly inside message bubbles.
-- **Chat Search**: Real-time filtering search bar in the console header to find specific queries or SQL code blocks.
-- **Clear Chat**: Clean confirmation modal to delete chat messages for the current workspace without deleting RAG metadata, versions, or datasets.
+*   **Backend Application Server**:
+    *   **FastAPI**: High-performance, fully async python REST API server.
+    *   **Uvicorn**: Lightning-fast ASGI server hosting the FastAPI backend on port `8000`.
+    *   **DuckDB**: Highly optimized, in-process columnar SQL OLAP database engine. Performs blazing-fast queries directly on local dataframes.
+    *   **Pandas & NumPy**: Core libraries for dataframe manipulation, ingestion heuristics, data cleaning, and statistical calculations.
+    *   **SQLite3**: Structured database (`backend/database/app.db`) for system metadata, persistent chat history, workspace indexing, scheduled crons, and rollback version control.
+    *   **Sentence Transformers (`all-MiniLM-L6-v2`)**: Transforms textual raw document chunks into 384-dimensional dense semantic vector embeddings.
+    *   **FAISS (Facebook AI Similarity Search)**: Vector index library for ultra-fast, local similarity calculations and nearest-neighbor search during RAG execution.
+    *   **APScheduler**: Process-backed task scheduler executing recurring analytical updates and automatic background report compilation.
+    *   **Google Gemini API (`gemini-2.5-flash`)**: Multi-agent natural language parser, SQL code generator, and semantic intelligence engine.
+    *   **ReportLab, python-docx, & python-pptx**: Document compilation libraries for custom PDF rendering, Word exports, and PPTX slide building.
 
-### 3. 📊 Smart Interactive Visualizations
-- **Auto-Chart Generation**: Evaluates query results and automatically constructs suitable Plotly.js charts.
-- **Chart Selector & Tools**: Includes controls to switch chart types, zoom, pan, enter fullscreen, or download as PNG.
-
-### 4. 🗂️ Multi-Format Document Analytics
-- Supports tabular datasets (`.csv`, `.tsv`, `.xlsx`, `.parquet`) and textual reports (`.pdf`, `.docx`, `.txt`).
-- Text files undergo semantic chunking and embedding-based RAG indexing using **Sentence Transformers** and **FAISS** to answer qualitative queries.
-
-### 5. ⏰ Automated Scheduling & Cron Reports
-- Configure scheduled data report queries running on intervals (Daily, Weekly, Monthly) or custom cron expressions.
-- Automated jobs compile insights in the background.
-
-### 6. 📥 Enterprise Exports & Wizard
-- **Export Report Wizard**: Configurable modal allowing selection of format (PDF, PPTX, Excel), scope (Current Query or Entire Chat Session), and target sections (Dataset Summary, SQL, Insights, Charts, Tables).
-- **Preview Summary**: Displays counts of queries, tables, and charts to be exported before finalizing the report.
-- **Chart Export Support**: Visual Plotly charts are generated as high-resolution images and embedded directly inside exported PDF and PPTX files.
-- **Clean Datasets**: Download your refined, cleaned datasets directly as **CSV** or **Excel** sheets.
-- **Excel Custom Sheet Export**: Generates tab-separated sheets for each query in scope with formatting, metadata, and custom fits.
+*   **Frontend Client Console**:
+    *   **React (v19)** & **Vite (v8)**: Ultra-fast dev tooling and interactive user interface compilation.
+    *   **Tailwind CSS (v4)**: Modern, utility-first CSS layout engine with glassmorphic variables.
+    *   **Framer Motion**: Premium visual micro-animations and slide-in panels.
+    *   **Lucide React**: Clean, minimalist vector icon assets.
+    *   **Plotly.js**: Dynamic vector charts that allow interactive zoom, pan, select, and PNG download.
+    *   **Axios**: Configured client-to-server HTTP API integration.
 
 ---
 
-## Technology Stack 🛠️
+## 🔄 End-to-End System Workflow
 
-- **Backend**: FastAPI (Python), Uvicorn, Pandas, DuckDB (OLAP analysis), SQLite3 (Metadata management), FAISS & Sentence Transformers (Semantic vector store & embeddings).
-- **Frontend**: React.js, Vite, Vanilla CSS with custom glassmorphism design tokens, Lucide Icons, Plotly.js.
-- **AI Engine**: Google Gemini API (`gemini-2.5-flash`).
+The following flowchart illustrates the multi-agent execution pipeline, tracing how raw data moves through ingestion, LLM translation, query execution, visualization, and export:
 
----
-
-## Getting Started ⚙️
-
-### Prerequisites
-- Python 3.8 or higher
-- Node.js 16 or higher
-- A Google Gemini API Key
-
----
-
-### Local Installation Guide
-
-#### 1. Clone & Set Up environment
-Copy the environment template and insert your Gemini API Key:
-```bash
-# In the project root, create a .env file:
-GOOGLE_API_KEY=your_gemini_api_key_here
-```
-
-#### 2. Backend Setup
-1. Create and activate a Python virtual environment:
-   ```bash
-   python -m venv .venv
-   .venv\Scripts\activate       # On Windows PowerShell
-   # source .venv/bin/activate  # On Linux/macOS
-   ```
-2. Install dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
-3. Run the FastAPI backend:
-   ```bash
-   python main.py
-   # Or directly run: uvicorn backend.main:app --port 8000 --reload
-   ```
-The backend server will run on `http://127.0.0.1:8000`.
-
-#### 3. Frontend Setup
-1. Navigate to the frontend directory:
-   ```bash
-   cd frontend
-   ```
-2. Install npm modules:
-   ```bash
-   npm install
-   ```
-3. Launch the Vite development server:
-   ```bash
-   npm run dev
-   ```
-Open `http://localhost:5173` in your browser to view the application.
-
----
-
-### Run using Docker 🐳
-
-To run the entire platform inside a containerized environment:
-
-```bash
-# 1. Build the Docker image
-docker build -t ai-data-agent .
-
-# 2. Run the container, mapping port 8000 and passing your API key
-docker run -p 8000:8000 -e GOOGLE_API_KEY=your_gemini_api_key_here ai-data-agent
+```mermaid
+graph TD
+    A[User Raw Files: CSV, XLSX, PDF, DOCX] --> B{File Type Router}
+    
+    %% Ingest Pipelines
+    B -->|Tabular Data| C[Pandas Dataframe Ingestion]
+    B -->|Document Text| D[Semantic Text Chunking & Embeddings]
+    
+    %% Tabular Pipeline
+    C --> E[Quality Diagnostics & Profiler]
+    E --> F[Workspace DB & Versioning SQLite]
+    F --> G[Interactive Cleaning Panel: Nulls, Outliers, Duplicates]
+    G -->|Version Control Rollback| F
+    
+    %% RAG Pipeline
+    D --> H[FAISS Local Vector Store Index]
+    
+    %% Chat & Agent Orchestration
+    I[User Chat Panel Query] --> J[Orchestrator Agent]
+    J -->|Qualitative QA| K[RAG Search Agent]
+    K -->|Retrieve Top-k Chunks| H
+    
+    J -->|Quantitative Query| L[Schema & Metadata Agent]
+    L -->|Context & Sample Values| M[Code Generation Agent]
+    M -->|Natural Language to SQL| N[DuckDB OLAP Execution Engine]
+    N -->|Relational Row Results| O[Visualization Agent: Chart Selector]
+    O -->|Plotly.js Visual Schema| P[ChatGPT-style Chat Memory Bubble]
+    
+    %% Output Channels
+    P --> Q[Export Report Wizard]
+    Q -->|PDF / PPTX / XLSX| R[High-Resolution Executive Deliverables]
+    
+    %% Scheduling System
+    S[Background APScheduler] -->|Triggers Cron Query| N
 ```
 
 ---
 
-## Directory Structure 📂
+## 📂 System Directory & File Dictionary
+
+Here is the directory structure detailing exactly what each directory and script executes:
 
 ```
 ai-data-analytics-agent/
-├── backend/
-│   ├── agents/             # Multi-Agent coordination modules (schema, cleaning, query, etc.)
-│   ├── api/                # FastAPI endpoints (upload, chat, cleaning, export, workspaces)
-│   ├── database/           # SQLite (app.db) and DuckDB (analytics.duckdb) managers
-│   ├── file_processing/    # Extractor factories for CSV, Excel, PDF, Word, TXT
-│   ├── llm/                # Gemini client integrations and prompts
-│   ├── memory/             # User session workspaces state storage
-│   └── main.py             # Backend entrypoint and startup routers
-├── frontend/
-│   ├── src/
-│   │   ├── components/     # UI modules (sidebar, upload panel, query chat console, results)
-│   │   ├── services/       # Axios API client requests
-│   │   ├── App.jsx         # Main interface grid and state coordinator
-│   │   └── index.css       # Core styling system (glassmorphism tokens)
-│   ├── index.html
-│   └── package.json
-├── main.py                 # Root application wrapper
-├── requirements.txt        # Python backend packages
-└── README.md               # Project documentation
+├── .env.template              # Environment setup template (Google API keys, DB configurations)
+├── .gitignore                 # Custom rules preventing local db, packages, env, caches, and node_modules from staging
+├── Dockerfile                 # Multi-stage Docker config containerizing the FastAPI and build directories
+├── requirements.txt           # Main python system dependencies list (with exact pinned versions)
+├── main.py                    # Root workspace script launching Uvicorn to run the backend on port 8000
+├── system_workflow_document.pdf # Detailed 20+ page generated PDF manual on the system architecture
+├── backend/                   # Python REST Backend Core
+│   ├── main.py                # Server initialization, CORS middleware configuration, and router mappings
+│   ├── agents/                # Intelligent Multi-Agent System
+│   │   ├── chart_recommender.py  # Selects optimal chart representations based on schema structure and query scope
+│   │   ├── quality_agent.py      # Performs automated diagnostic profiles of nulls, duplicates, types, and outliers
+│   │   ├── rag_agent.py          # Builds semantic FAISS indices, chunks text, and answers query questions using embeddings
+│   │   ├── scheduler_agent.py    # Manages recurring background jobs and executes reports when cron fires
+│   │   ├── cleaning_agent/       # Operations to drop nulls, filter outliers using IQR, and drop duplicate rows
+│   │   ├── code_generation_agent/# Converts natural language requests into complex, exact DuckDB SQL
+│   │   ├── insight_agent/        # Evaluates raw SQL query outputs to explain findings in clear plain text
+│   │   ├── metadata_agent/       # Analyzes files to build data types, value ranges, and description indices
+│   │   ├── orchestrator/         # Main router deciding whether query requires DuckDB SQL or RAG document search
+│   │   ├── schema_agent/         # Extracts column properties and format contexts for LLM prompts
+│   │   └── visualization_agent/  # Translates dataset fields into Plotly visual JSON formats
+│   ├── api/                   # FastAPI Endpoints
+│   │   ├── chart_routes.py       # Services returning custom charts or updates for individual widgets
+│   │   ├── chat_routes.py        # Connects to LLM and returns assistant responses containing SQL, markdown, and tables
+│   │   ├── cleaning_routes.py    # Trigger cleaning actions (impute, drop nulls, filter outliers, rollback versions)
+│   │   ├── export_routes.py      # Compiles multi-section PDF, PPTX, and XLSX sheets containing text, charts, and tables
+│   │   ├── profiling_routes.py   # Returns comprehensive data profiles and schemas for current datasets
+│   │   ├── rag_routes.py         # Indexes uploaded documents and handles document similarity searches
+│   │   ├── scheduler_routes.py   # API endpoints to register, view, or delete automated background cron schedules
+│   │   ├── upload_routes.py      # Handles raw file uploads, verifies extensions, and creates active workspaces
+│   │   └── workspace_routes.py   # Workspace switching, workspace creations, and listing available files
+│   ├── database/              # Storage Engine Management
+│   │   ├── app.db                # SQLite database storing workspaces, messages, versions, schedules (git-ignored)
+│   │   ├── duckdb_manager.py     # Execution interface for DuckDB, handling file loads and queries
+│   │   └── sqlite_manager.py     # Interface for workspace tables, histories, versions, and schedules in SQLite
+│   ├── file_processing/       # Custom parser engines for raw files
+│   │   ├── parser_factory.py     # File routing factory pointing to loader classes based on extension
+│   │   ├── csv_loader.py         # Tabular loading and parsing for CSV
+│   │   ├── excel_loader.py       # Multi-sheet spreadsheet parser using Openpyxl
+│   │   ├── docx_loader.py        # Extracts text and structure from Word files using python-docx
+│   │   ├── pdf_loader.py         # Heavy PDF reader and text layout scanner using pdfplumber
+│   │   ├── parquet_loader.py     # Binary columnar database file loading
+│   │   ├── tsv_loader.py         # Tab-delimited file reader
+│   │   └── txt_loader.py         # Standard plaintext parser
+│   ├── llm/                   # Large Language Model Connectors
+│   │   ├── gemini_client.py      # Configures connection credentials and forwards generation payloads to Gemini API
+│   │   └── prompts.py            # Store of system roles, SQL generation structures, and cleaning guidelines
+│   ├── memory/                # Session Memory
+│   │   └── session_store.py      # Transient active session configurations and in-memory caches
+│   └── uploads/               # Temporary directory storing raw and clean tabular files (git-ignored)
+└── frontend/                  # React Front-End Core
+    ├── package.json           # Frontend javascript libraries and execution scripts
+    ├── index.html             # Main entry point mounting the React app
+    ├── vite.config.js         # Port settings, plugins, and builder configurations
+    ├── src/
+    │   ├── main.jsx           # Mounting logic that renders React inside the browser DOM
+    │   ├── App.jsx            # Core layout combining the sidebar, uploads, cleaning panel, and chat console
+    │   ├── App.css            # Base layouts and scroll resets
+    │   ├── index.css          # Custom styling theme implementing dark glassmorphism
+    │   ├── components/        # Frontend UI Components
+    │   │   ├── ChartView.jsx     # Renders Plotly.js charts with custom types, zooming, and downloading tools
+    │   │   ├── ChatPanel.jsx     # Scrollable dialogue board showing markdown, SQL boxes, and typing animations
+    │   │   ├── ResultTable.jsx   # Grid tables displaying data query outputs with pagination
+    │   │   ├── SqlViewer.jsx     # Accordion collapsible drawer displaying executed SQL queries with syntax copy-paste
+    │   │   ├── UploadPanel.jsx   # Ingestion panel with file type drop zones and status updates
+    │   │   └── WorkspaceList.jsx # Sidebar showing active files, workspaces, and chat cleaning buttons
+    │   └── services/          # HTTP Communications
+    │       └── api.js            # Unified Axios request mappings to FastAPI endpoints
 ```
 
 ---
 
-## UI Styling & Design Tokens 🎨
+## ⚙️ Step-by-Step Installation & Configuration Guide
 
-The UI features a dark Apple-inspired minimalist design constructed with:
-- **Glassmorphism**: Elegant card layouts utilizing `backdrop-filter: blur(20px)` and subtle borders (`rgba(255, 255, 255, 0.08)`).
-- **Interactive Accents**: Soft violet/indigo focus outlines and glows (`box-shadow: 0 0 30px rgba(167, 139, 250, 0.15)`).
-- **Fluid Transitions**: Smooth `250ms` hover and select transitions across all buttons, inputs, and list nodes.
+Follow these sequential instructions to install, configure, and boot the entire platform on your local machine:
+
+### 1. Configure the Environment
+The application requires a Google Gemini API Key to run text-to-SQL logic, code generation, and insight summarization.
+
+1. In the root directory, create a `.env` file (copied from `.env.template` if present, or generated fresh):
+   ```bash
+   GOOGLE_API_KEY=your_google_gemini_api_key_here
+   ```
+2. *(Optional)* If you want to specify a custom storage path for the SQLite metadata database, you can add:
+   ```bash
+   SQLITE_DB_PATH=database/app.db
+   ```
+
+---
+
+### 2. Backend Setup & Startup
+
+1. **Open your terminal** and navigate to the project root directory.
+2. **Create a virtual environment**:
+   *   **Windows**:
+       ```powershell
+       python -m venv .venv
+       ```
+   *   **macOS / Linux**:
+       ```bash
+       python3 -m venv .venv
+       ```
+3. **Activate the virtual environment**:
+   *   **Windows (PowerShell)**:
+       ```powershell
+       .venv\Scripts\Activate.ps1
+       ```
+   *   **Windows (CMD)**:
+       ```cmd
+       .venv\Scripts\activate.bat
+       ```
+   *   **macOS / Linux**:
+       ```bash
+       source .venv/bin/activate
+       ```
+4. **Install backend dependencies**:
+   ```bash
+   pip install --upgrade pip
+   pip install -r requirements.txt
+   ```
+5. **Run the FastAPI server**:
+   ```bash
+   python main.py
+   ```
+   *   *Alternative*: Run directly through Uvicorn:
+       ```bash
+       uvicorn backend.main:app --port 8000 --reload
+       ```
+   The backend server will spin up on **`http://127.0.0.1:8000`**. You can verify that the backend is running by opening `http://127.0.0.1:8000/docs` in your browser to view the interactive Swagger API documentation.
+
+---
+
+### 3. Frontend Setup & Startup
+
+1. **Open a new terminal window** (do not close the backend terminal).
+2. **Navigate to the frontend folder**:
+   ```bash
+   cd frontend
+   ```
+3. **Install npm modules**:
+   ```bash
+   npm install
+   ```
+4. **Launch the development server**:
+   ```bash
+   npm run dev
+   ```
+   The Vite dev server will spin up (typically on **`http://localhost:5173`**).
+5. **Access the application**:
+   Open your web browser and go to `http://localhost:5173`. You will be greeted by the dark glassmorphic console, ready for data upload and chat analysis!
+
+---
+
+## 🐳 Running with Docker
+
+To run both the frontend and backend inside a single, containerized workspace environment:
+
+1. **Build the Docker Image**:
+   In the root directory of the project, run:
+   ```bash
+   docker build -t ai-data-analytics-agent .
+   ```
+2. **Run the Container**:
+   Pass your Google Gemini API key as an environment variable and map port 8000:
+   ```bash
+   docker run -p 8000:8000 -e GOOGLE_API_KEY=your_gemini_api_key_here ai-data-analytics-agent
+   ```
+3. Open `http://localhost:8000` or the mapped address to access the containerized version.
+
+---
+
+## 🚦 System Verification & Troubleshooting
+
+### 1. Port Conflicts
+*   **Port 8000 (Backend)**: Ensure no other application (e.g., local server, development tool) is using port 8000. If you need to run on a different port, run:
+    ```bash
+    uvicorn backend.main:app --port 8001 --reload
+    ```
+    Then, update the base API URL in `frontend/src/services/api.js`.
+*   **Port 5173 (Frontend)**: If port 5173 is occupied, Vite will automatically select the next available port (e.g., 5174). Check the terminal output to confirm the exact address.
+
+### 2. Missing API Key
+*   If you see `ERROR: Gemini client not configured` inside the chat bubble, verify that your `.env` file is named exactly `.env` (with a leading dot) and contains a valid key: `GOOGLE_API_KEY=AIzaSy...`
+*   Ensure that there are no trailing spaces or quotation marks in the `.env` value.
+
+### 3. Database Reset
+*   If you need to completely reset the application history, workspaces, and version logs:
+    1. Terminate the backend server.
+    2. Delete the database file `backend/database/app.db`.
+    3. Delete any local DuckDB databases (e.g. `analytics.duckdb` and backups) in the project directories.
+    4. Restart the backend server. The database schemas will be regenerated automatically on startup.
