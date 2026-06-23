@@ -21,10 +21,17 @@ from backend.api.scheduler_routes import router as scheduler_router
 
 
 
+from fastapi.staticfiles import StaticFiles
+import os
+
 app = FastAPI(
     title="AI Data Analytics Agent"
 )
-# Force hot reload of modules
+
+# Serve static files from the exports directory
+exports_dir = root_dir / "exports"
+exports_dir.mkdir(exist_ok=True)
+app.mount("/exports", StaticFiles(directory=str(exports_dir)), name="exports")
 
 
 

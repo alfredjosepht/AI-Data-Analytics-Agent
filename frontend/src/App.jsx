@@ -86,7 +86,7 @@ function App() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   // Dataset Upload / Replacement States
-  const [duplicateWorkspace, setDuplicateWorkspace] = useState(null);
+  const [duplicateWorkspaceDetected, setDuplicateWorkspaceDetected] = useState(null);
   const [fileToUpload, setFileToUpload] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadRecommendations, setUploadRecommendations] = useState(null);
@@ -341,7 +341,7 @@ function App() {
 
   const handleIngestFile = async (selectedFile, replaceId = null) => {
     setUploadLoading(true);
-    setDuplicateWorkspace(null);
+    setDuplicateWorkspaceDetected(null);
 
     try {
       if (replaceId) {
@@ -547,26 +547,26 @@ function App() {
         </div>
 
         {/* Dataset Replacement Warning Card */}
-        {!sidebarCollapsed && duplicateWorkspace && (
+        {!sidebarCollapsed && duplicateWorkspaceDetected && (
           <div className="shrink-0 glass-panel p-4 border border-brand-border bg-brand-card/90 flex flex-col gap-2 max-h-[150px] overflow-y-auto scrollbar-thin">
             <div className="flex items-center gap-2 text-brand-warning">
               <AlertTriangle className="h-4.5 w-4.5 text-brand-warning shrink-0" />
               <span className="text-[11px] font-black uppercase tracking-wider">Confirm Replacement</span>
             </div>
             <p className="text-[10px] text-brand-muted leading-relaxed">
-              A dataset named <strong className="text-white">{duplicateWorkspace.file_name}</strong> already exists as <strong className="text-white">{duplicateWorkspace.name.toUpperCase()}</strong>.
+              A dataset named <strong className="text-white">{duplicateWorkspaceDetected.file_name}</strong> already exists as <strong className="text-white">{duplicateWorkspaceDetected.name.toUpperCase()}</strong>.
               Replacing it will permanently delete existing metadata, charts, reports, and version history.
             </p>
             <div className="flex gap-2 mt-1">
               <button
-                onClick={() => handleIngestFile(fileToUpload, duplicateWorkspace.id)}
+                onClick={() => handleIngestFile(fileToUpload, duplicateWorkspaceDetected.id)}
                 disabled={uploadLoading}
                 className="flex-1 bg-brand-error hover:bg-red-500 text-white font-bold py-1.5 rounded text-[10px] transition-colors cursor-pointer text-center"
               >
                 Overwrite
               </button>
               <button
-                onClick={() => { setDuplicateWorkspace(null); setFileToUpload(null); }}
+                onClick={() => { setDuplicateWorkspaceDetected(null); setFileToUpload(null); }}
                 disabled={uploadLoading}
                 className="flex-1 bg-brand-input border border-brand-border hover:bg-brand-card text-brand-muted font-bold py-1.5 rounded text-[10px] transition-colors cursor-pointer text-center"
               >
@@ -581,7 +581,7 @@ function App() {
           <UploadPanel
             workspaces={workspaces}
             onIngestStart={(file) => handleIngestFile(file)}
-            onDuplicateDetected={(dup, file) => { setDuplicateWorkspace(dup); setFileToUpload(file); }}
+            onDuplicateDetected={(dup, file) => { setDuplicateWorkspaceDetected(dup); setFileToUpload(file); }}
             uploadLoading={uploadLoading}
             collapsed={sidebarCollapsed}
             fileToUpload={fileToUpload}

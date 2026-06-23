@@ -69,7 +69,7 @@ class QueryAgent:
     @staticmethod
     def verify_consistency(question, sql, result, answer, chart):
         # Clean results sample
-        result_sample = result[:20] if result else []
+        result_sample = result[:100] if result else []
         
         # Check LLM client availability
         from backend.llm.gemini_client import gemini_client
@@ -156,6 +156,87 @@ Ensure your response is valid JSON and contains nothing else."""
         return True, "No discrepancies detected programmatically"
 
     @staticmethod
+    def _find_identical_or_similar_question(question, history):
+        from backend.llm.gemini_client import gemini_client
+        if not gemini_client or not getattr(gemini_client, "available", False):
+            return None
+
+        # Format history questions and answers
+        # We only pass a maximum of the last 15 messages to keep context concise
+        recent_history = history[-15:]
+        history_str = ""
+        for idx, chat in enumerate(recent_history):
+            history_str += f"Index: {idx}\nQuestion: \"{chat.get('question')}\"\nSQL: \"{chat.get('sql_query')}\"\nAnswer: \"{chat.get('answer')}\"\n---\n"
+
+        prompt = f"""You are a chat history analyzer.
+Your task is to compare a new user question with previous questions in the chat history.
+We want to determine if the new question has the same intent and can reuse a previous response directly, or if only small details have changed so that we can adapt the previous SQL query instead of generating a new one from scratch.
+
+CHAT HISTORY:
+{history_str}
+
+NEW QUESTION:
+"{question}"
+
+DETERMINE the relationship of the NEW QUESTION to the items in the CHAT HISTORY:
+- "exact": The new question is the same or substantially identical in meaning/intent (e.g., asking for the same data, just with slightly different phrasing or capitalizations).
+- "small_change": The new question is a direct variation of a previous question, where only a minor detail has changed (such as a specific year, filter value, category name, or ranking size (e.g. top 5 instead of top 10)), but the overall structure and query logic remain the same.
+- "none": The new question has a different intent or requests completely different metrics, tables, columns, or analysis.
+
+Choose the closest match from the chat history.
+
+Output your response as a valid JSON object with the following fields:
+- "match_type": One of "exact", "small_change", "none".
+- "match_index": The 0-based Index of the closest matching item in the CHAT HISTORY (only required if match_type is "exact" or "small_change", otherwise null).
+- "updated_sql": (Only required if match_type is "small_change") The updated DuckDB SQL query. You must adapt the SQL query of the matched history item to reflect ONLY the small detail changes in the new question. Do not modify any other tables, joins, aliases, or filters.
+
+Ensure your response is valid JSON and contains absolutely nothing else. Do not include markdown code block formatting (like ```json)."""
+
+        try:
+            res_text = gemini_client.generate(prompt)
+            clean_json_str = res_text.replace("```json", "").replace("```", "").strip()
+            match = re.search(r'\{.*\}', clean_json_str, re.DOTALL)
+            if match:
+                clean_json_str = match.group(0)
+            parsed = json.loads(clean_json_str)
+            return parsed
+        except Exception as e:
+            print(f"Similarity analysis failed: {e}")
+            return None
+
+    @staticmethod
+    def _update_answer_with_new_data(new_question, old_question, old_answer, old_result, new_result):
+        from backend.llm.gemini_client import gemini_client
+        if not gemini_client or not getattr(gemini_client, "available", False):
+            return "Unable to regenerate answer text."
+
+        prompt = f"""You are a Data Analyst.
+A user asked a new question that is a minor variation of a previous question.
+We have executed the updated SQL query and got new results.
+
+PREVIOUS QUESTION: "{old_question}"
+PREVIOUS SQL RESULT: {old_result}
+PREVIOUS ANSWER: "{old_answer}"
+
+NEW QUESTION: "{new_question}"
+NEW SQL RESULT: {new_result}
+
+TASK:
+Update the PREVIOUS ANSWER to reflect the values from the NEW SQL RESULT.
+Keep all other wording, tone, formatting, and structure exactly the same.
+Update only the specific details (like dates, metrics, numbers, or category names) that changed.
+Keep the answer concise to save time and tokens. Do not add any new insights or explanations.
+
+UPDATED ANSWER:"""
+
+        try:
+            res_text = gemini_client.generate(prompt)
+            return res_text.strip()
+        except Exception as e:
+            print(f"Failed to update answer with new results: {e}")
+            return "Error updating answer."
+
+    @staticmethod
     def execute_question(
         question
     ):
@@ -184,6 +265,127 @@ Ensure your response is valid JSON and contains nothing else."""
         )
 
         workspace_id = workspace.get("workspace_id")
+
+        # Check similarity cache
+        try:
+            history = sqlite_manager.get_chat_history(workspace_id)
+            if history:
+                match_result = QueryAgent._find_identical_or_similar_question(question, history)
+                if match_result and match_result.get("match_type") == "exact":
+                    matched_idx = match_result.get("match_index")
+                    if matched_idx is not None:
+                        try:
+                            matched_idx = int(matched_idx)
+                        except (ValueError, TypeError):
+                            matched_idx = None
+
+                    if matched_idx is not None and 0 <= matched_idx < len(history):
+                        matched_chat = history[matched_idx]
+                        
+                        res_data = None
+                        if matched_chat.get("result_json"):
+                            try:
+                                res_data = json.loads(matched_chat["result_json"])
+                            except Exception:
+                                res_data = []
+                        else:
+                            res_data = []
+                        
+                        chart_data = None
+                        if matched_chat.get("chart_json"):
+                            try:
+                                chart_data = json.loads(matched_chat["chart_json"])
+                            except Exception:
+                                chart_data = None
+
+                        sqlite_manager.save_chat(
+                            workspace_id=workspace_id,
+                            question=question,
+                            answer=matched_chat.get("answer"),
+                            sql_query=matched_chat.get("sql_query"),
+                            result_json=matched_chat.get("result_json"),
+                            chart_json=matched_chat.get("chart_json")
+                        )
+
+                        response = {
+                            "question": question,
+                            "answer": matched_chat.get("answer"),
+                            "sql": matched_chat.get("sql_query"),
+                            "chart": chart_data,
+                            "result": res_data,
+                        }
+                        if table_name:
+                            response["table"] = table_name
+                            response["null_transparency"] = None
+                        return response
+
+                elif match_result and match_result.get("match_type") == "small_change":
+                    matched_idx = match_result.get("match_index")
+                    if matched_idx is not None:
+                        try:
+                            matched_idx = int(matched_idx)
+                        except (ValueError, TypeError):
+                            matched_idx = None
+
+                    updated_sql = match_result.get("updated_sql")
+                    if updated_sql:
+                        updated_sql = updated_sql.replace("```sql", "").replace("```", "").strip()
+
+                    if matched_idx is not None and 0 <= matched_idx < len(history) and updated_sql and table_name:
+                        matched_chat = history[matched_idx]
+                        
+                        try:
+                            result_df = duckdb_manager.query(updated_sql)
+                            new_result = result_df.to_dict(orient="records")
+                            
+                            old_result_data = None
+                            if matched_chat.get("result_json"):
+                                try:
+                                    old_result_data = json.loads(matched_chat["result_json"])
+                                except Exception:
+                                    old_result_data = []
+
+                            updated_answer = QueryAgent._update_answer_with_new_data(
+                                question,
+                                matched_chat.get("question"),
+                                matched_chat.get("answer"),
+                                old_result_data,
+                                new_result
+                            )
+                            
+                            chart_path = None
+                            try:
+                                if len(result_df.columns) >= 2:
+                                    from backend.agents.visualization_agent.visualization_agent import VisualizationAgent
+                                    chart_path = VisualizationAgent.create_chart(result_df)
+                            except Exception as e:
+                                print(f"Chart error in small change path: {e}")
+
+                            sanitized_result = sanitize_json_values(new_result) if new_result else []
+                            sanitized_chart_path = sanitize_json_values(chart_path) if chart_path else None
+
+                            sqlite_manager.save_chat(
+                                workspace_id=workspace_id,
+                                question=question,
+                                answer=updated_answer,
+                                sql_query=updated_sql,
+                                result_json=json.dumps(sanitized_result) if sanitized_result else None,
+                                chart_json=json.dumps(sanitized_chart_path) if sanitized_chart_path else None
+                            )
+
+                            return {
+                                "question": question,
+                                "answer": updated_answer,
+                                "table": table_name,
+                                "sql": updated_sql,
+                                "chart": sanitized_chart_path,
+                                "result": sanitized_result,
+                                "null_transparency": None
+                            }
+                        except Exception as sql_err:
+                            print(f"Failed to run updated SQL for small change: {sql_err}. Falling back to normal pipeline.")
+        except Exception as err:
+            print(f"Error checking cache / similarity: {err}")
 
         if not table_name or not schema:
             # Check if this is a document workspace
@@ -251,28 +453,33 @@ Ensure your response is valid JSON and contains nothing else."""
                 []
             }
 
-        try:
-            result_df = (
-                duckdb_manager
-                .query(sql)
-            )
-        except Exception as e:
+        # Check if the generated SQL contains multiple queries separated by semicolons
+        sql_statements = [s.strip() for s in sql.split(";") if s.strip()]
+        
+        result_dfs = []
+        combined_results = []
+        execution_errors = []
+        
+        for stmt in sql_statements:
+            try:
+                stmt_df = duckdb_manager.query(stmt)
+                result_dfs.append(stmt_df)
+                combined_results.extend(stmt_df.to_dict(orient="records"))
+            except Exception as e_stmt:
+                execution_errors.append(f"SQL Error in statement '{stmt}': {str(e_stmt)}")
+                
+        if not result_dfs:
+            err_msg = execution_errors[0] if execution_errors else "SQL Execution Error"
             return {
-                "question":
-                question,
-
-                "answer":
-                f"SQL Error: {str(e)}",
-
-                "sql":
-                sql,
-
-                "chart":
-                None,
-
-                "result":
-                []
+                "question": question,
+                "answer": err_msg,
+                "sql": sql,
+                "chart": None,
+                "result": []
             }
+            
+        # Use the first successful result_df for UI table and visualization
+        result_df = result_dfs[0]
 
         # Identify grouping columns
         grouping_cols = []
@@ -325,7 +532,7 @@ Ensure your response is valid JSON and contains nothing else."""
             InsightAgent
             .generate_answer(
                 question,
-                result
+                combined_results
             )
         )
 
@@ -512,7 +719,7 @@ Ensure your response is valid JSON and contains nothing else."""
         # 4. Consistency Verification
         consistent, reason = True, "No discrepancies detected"
         try:
-            consistent, reason = QueryAgent.verify_consistency(question, sql, result, answer, chart_path)
+            consistent, reason = QueryAgent.verify_consistency(question, sql, combined_results, answer, chart_path)
         except Exception as exc:
             print(f"Consistency verification error: {exc}")
 

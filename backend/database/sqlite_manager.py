@@ -126,6 +126,13 @@ class SQLiteManager:
         )
         """)
 
+        # Normalize backslashes to forward slashes for static file serving
+        try:
+            cursor.execute("UPDATE reports SET file_path = REPLACE(file_path, ?, ?)", ('\\', '/'))
+            cursor.execute("UPDATE dataset_versions SET file_path = REPLACE(file_path, ?, ?)", ('\\', '/'))
+        except Exception as e:
+            print(f"Error running reports path migration: {e}")
+
         self.conn.commit()
         self.migrate_chat_history_to_messages()
 
@@ -275,23 +282,11 @@ class SQLiteManager:
 
         workspaces = []
 
-        from backend.agents.quality_agent import QualityAgent
-
         for row in rows:
             ws_id = row[0]
             metadata = json.loads(row[6]) if row[6] else {}
             row_count = metadata.get("row_count")
-            overall_score = None
-
-            if row[4]:  # table_name
-                try:
-                    profile_res = QualityAgent.profile_workspace(ws_id)
-                    if profile_res and profile_res.get("profile"):
-                        overall_score = profile_res["profile"].get("overall_score")
-                        if row_count is None:
-                            row_count = profile_res["profile"].get("row_count")
-                except Exception as e:
-                    print(f"Error profiling workspace {ws_id} in list_workspaces: {e}")
+            overall_score = metadata.get("overall_score")
 
             workspaces.append({
                 "id": ws_id,
@@ -306,6 +301,7 @@ class SQLiteManager:
             })
 
         return workspaces
+
 
     def save_chat(
         self,
@@ -453,12 +449,13 @@ class SQLiteManager:
 
     def create_report(self, workspace_id, title, file_path, file_type):
         cursor = self.conn.cursor()
+        normalized_path = file_path.replace('\\', '/') if file_path else file_path
         cursor.execute(
             """
             INSERT INTO reports (workspace_id, title, file_path, file_type)
             VALUES (?, ?, ?, ?)
             """,
-            (workspace_id, title, file_path, file_type)
+            (workspace_id, title, normalized_path, file_type)
         )
         self.conn.commit()
         return cursor.lastrowid

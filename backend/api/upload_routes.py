@@ -98,7 +98,13 @@ async def upload_file(
 
             # Save cleaned copy initially
             cleaned_path = os.path.join(CLEAN_FOLDER, f"cleaned_{table_name}.csv")
-            cleaned_df.to_csv(cleaned_path, index=False)
+            try:
+                cleaned_df.to_csv(cleaned_path, index=False)
+            except PermissionError:
+                import time
+                timestamp = int(time.time())
+                cleaned_path = os.path.join(CLEAN_FOLDER, f"cleaned_{table_name}_{timestamp}.csv")
+                cleaned_df.to_csv(cleaned_path, index=False)
 
             # Create workspace
             workspace_id = sqlite_manager.create_workspace(
