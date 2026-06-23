@@ -8,6 +8,7 @@ venv/
 .venv/
 backend/venv/
 .env*
+!frontend/.env.example
 
 # Uploads & Assets
 uploads/
