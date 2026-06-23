@@ -1,12 +1,4 @@
 import os
-try:
-    from sentence_transformers import SentenceTransformer
-    import faiss
-    import numpy as np
-except Exception:
-    SentenceTransformer = None
-    faiss = None
-    np = None
 
 from backend.database.sqlite_manager import sqlite_manager
 
@@ -14,6 +6,25 @@ from backend.database.sqlite_manager import sqlite_manager
 class RAGAgent:
 
     INDEX_DIR = "rag_indexes"
+    _model = None
+
+    @staticmethod
+    def _load_dependencies():
+        try:
+            from sentence_transformers import SentenceTransformer
+            import faiss
+        except Exception as exc:
+            raise RuntimeError("sentence-transformers or faiss not installed") from exc
+
+        return SentenceTransformer, faiss
+
+    @staticmethod
+    def _get_model():
+        if RAGAgent._model is None:
+            SentenceTransformer, _ = RAGAgent._load_dependencies()
+            RAGAgent._model = SentenceTransformer("all-MiniLM-L6-v2")
+
+        return RAGAgent._model
 
     @staticmethod
     def _ensure_index_dir():
@@ -31,10 +42,8 @@ class RAGAgent:
         if not text:
             raise ValueError("No document text to index for this workspace")
 
-        if SentenceTransformer is None:
-            raise RuntimeError("sentence-transformers or faiss not installed")
-
-        model = SentenceTransformer("all-MiniLM-L6-v2")
+        _, faiss = RAGAgent._load_dependencies()
+        model = RAGAgent._get_model()
         # Chunk text by paragraphs
         docs = [p.strip() for p in text.split("\n\n") if p.strip()]
         if not docs:
@@ -60,8 +69,7 @@ class RAGAgent:
 
     @staticmethod
     def query_workspace(workspace_id: int, query: str, top_k: int = 3):
-        if SentenceTransformer is None:
-            raise RuntimeError("sentence-transformers or faiss not installed. Wait for pip installation to finish.")
+        _, faiss = RAGAgent._load_dependencies()
 
         path = os.path.join(RAGAgent.INDEX_DIR, f"ws_{workspace_id}.index")
         docs_path = os.path.join(RAGAgent.INDEX_DIR, f"ws_{workspace_id}.docs")
@@ -75,7 +83,7 @@ class RAGAgent:
 
         index = faiss.read_index(path)
 
-        model = SentenceTransformer("all-MiniLM-L6-v2")
+        model = RAGAgent._get_model()
         q_emb = model.encode([query], convert_to_numpy=True)
 
         D, I = index.search(q_emb, top_k)
