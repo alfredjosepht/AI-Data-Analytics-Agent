@@ -10,10 +10,24 @@ class DuckDBManager:
         self.db_path = str(root_dir / "analytics.duckdb")
 
     def get_connection(self):
-
-        return duckdb.connect(
+        conn = duckdb.connect(
             self.db_path
         )
+        try:
+            conn.execute("""
+            CREATE OR REPLACE MACRO initcap(ws) AS (
+                list_reduce(
+                    list_transform(
+                        regexp_split_to_array(ws, '\\s+'), 
+                        w -> concat(upper(w[1]), lower(substring(w, 2)))
+                    ),
+                    (a, b) -> concat(a, ' ', b)
+                )
+            );
+            """)
+        except Exception as e:
+            print(f"Failed to register initcap macro in DuckDB: {e}")
+        return conn
 
     def save_dataframe(
         self,

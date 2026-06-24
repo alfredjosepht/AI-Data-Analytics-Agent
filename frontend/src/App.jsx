@@ -333,7 +333,12 @@ function App() {
       }
     } catch (err) {
       console.error(err);
-      showToast("Failed to apply cleaning actions.", "error");
+      const errMsg = err.response?.data?.detail || "";
+      if (errMsg.includes("Original dataset file") || err.response?.status === 400) {
+        showToast("File not found on server due to sleep. Please re-upload your CSV.", "error");
+      } else {
+        showToast("Failed to apply cleaning actions.", "error");
+      }
     } finally {
       setCleaningLoading(false);
     }

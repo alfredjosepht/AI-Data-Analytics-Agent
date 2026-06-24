@@ -61,8 +61,7 @@ TEXT AND CATEGORY RULES
 
 30. Preserve original category values.
 31. Use TRIM on text fields when leading or trailing whitespace could split equivalent categories.
-32. Do not change capitalization with INITCAP, UPPER, or LOWER unless needed for
-    matching or explicitly requested.
+32. When grouping or aggregating by text/categorical fields, use INITCAP(TRIM(column_name)) to ensure casing inconsistencies in raw data are normalized.
 33. For user-provided text filters, use case-insensitive matching where appropriate.
 34. Escape string literals correctly.
 35. Exclude category rows equal to '⚠️ Unassigned' from KPIs, averages,
