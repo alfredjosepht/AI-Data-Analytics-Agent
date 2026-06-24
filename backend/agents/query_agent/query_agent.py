@@ -356,7 +356,6 @@ UPDATED ANSWER:"""
                             chart_path = None
                             try:
                                 if len(result_df.columns) >= 2:
-                                    from backend.agents.visualization_agent.visualization_agent import VisualizationAgent
                                     chart_path = VisualizationAgent.create_chart(result_df)
                             except Exception as e:
                                 print(f"Chart error in small change path: {e}")
