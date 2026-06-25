@@ -1,10 +1,10 @@
-# AI-Data-Analytics-Agent 📊🤖
+# AI-Data-Analytics-Agent 
 
 An enterprise-grade, premium intelligent business intelligence (BI) and automated data analytics platform. It dynamically ingests tabular datasets (CSV, Excel, TSV, Parquet) and text-heavy documents (PDF, DOCX, TXT), performs automated data quality audits, provides an interactive control panel for versioned cleaning steps, generates and runs high-performance SQL queries via a **DuckDB** engine, renders automatic interactive **Plotly** visualizations, handles semantic Q&A using retrieval-augmented generation (**RAG**), schedules recurring report compilation in the background, and bundles analytical insights into executive-ready PDF, PowerPoint, or Excel reports.
 
 ---
 
-## 🛠️ Architecture & Technology Stack
+##  Architecture & Technology Stack
 
 The platform features a decoupled client-server architecture built on modern web and data science frameworks:
 
@@ -30,7 +30,7 @@ The platform features a decoupled client-server architecture built on modern web
 
 ---
 
-## 🔄 End-to-End System Workflow
+##  End-to-End System Workflow
 
 The following flowchart illustrates the multi-agent execution pipeline, tracing how raw data moves through ingestion, LLM translation, query execution, visualization, and export:
 
@@ -72,7 +72,7 @@ graph TD
 
 ---
 
-## 📂 System Directory & File Dictionary
+##  System Directory & File Dictionary
 
 Here is the directory structure detailing exactly what each directory and script executes:
 
@@ -149,7 +149,7 @@ ai-data-analytics-agent/
 
 ---
 
-## ⚙️ Step-by-Step Installation & Configuration Guide
+##  Step-by-Step Installation & Configuration Guide
 
 Follow these sequential instructions to install, configure, and boot the entire platform on your local machine:
 
@@ -230,7 +230,7 @@ The application requires a Google Gemini API Key to run text-to-SQL logic, code 
 
 ---
 
-## 🐳 Running with Docker
+##  Running with Docker
 
 To run both the frontend and backend inside a single, containerized workspace environment:
 
@@ -248,7 +248,7 @@ To run both the frontend and backend inside a single, containerized workspace en
 
 ---
 
-## 🚦 System Verification & Troubleshooting
+##  System Verification & Troubleshooting
 
 ### 1. Port Conflicts
 *   **Port 8000 (Backend)**: Ensure no other application (e.g., local server, development tool) is using port 8000. If you need to run on a different port, run:
